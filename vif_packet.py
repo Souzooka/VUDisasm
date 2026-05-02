@@ -20,7 +20,7 @@ class VIFPacket:
 
     def decode(self) -> List[str]:
         DMA_IDS = ["refe", "cnt", "next", "ref", "refs", "call", "ret", "end"]
-        COMMAND_PREFIX = "[DMAC] "
+        COMMAND_PREFIX = f"{"[DMAC]":<8}"
         operations = []
 
         # First 8 bytes are DMATag and ADDR

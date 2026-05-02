@@ -1,5 +1,7 @@
 import struct
 from typing import List, Tuple
+from lower import decode as lower_decode
+from upper import decode as upper_decode
 
 def _cmd_with_args(cmd: str, kwargs={}) -> str:
     result = f"{cmd:<9} "
@@ -13,8 +15,19 @@ def _cmd_with_args(cmd: str, kwargs={}) -> str:
         result += f"{k}={hex(kwargs[k])}"
     return result
 
+def _decode_mpg(buf: bytes, start_idx: int, num: int) -> Tuple[int, List[str]]:
+    strings = []
+    for i in range(num):
+        idx = start_idx + i * 8
+        lower = struct.unpack("<I", buf[idx+0:idx+4])[0]
+        upper = struct.unpack("<I", buf[idx+4:idx+8])[0]
+        strings.append(lower_decode(lower))
+        strings.append(upper_decode(upper))
+    
+    return num * 0x8, strings
+
 def decode(buf: bytes, start_idx: int) -> Tuple[int, List[str]]:
-    COMMAND_PREFIX = "[VIF] "
+    COMMAND_PREFIX = f"{"[VIF]":<8}"
     command = struct.unpack("<I", buf[start_idx:start_idx+4])[0]
     i = command >> 31
     i_prefix = "i" if i else ""
@@ -61,9 +74,15 @@ def decode(buf: bytes, start_idx: int) -> Tuple[int, List[str]]:
         case 0b0110001:
             return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STCOL")}"]
         case 0b1001010:
-            # TODO: Consume subpacket
-            print("WARNING: [VIF] MPG encountered but consuming subpacket unimplemented")
-            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MPG")}"]
+            if (num == 0): num = 256
+            load_addr = imm * 0x8
+
+            cmd_size = 4
+            cmd_str = [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MPG", {"SIZE": num * 0x8, "LOADADDR": load_addr})}"]
+
+            size, strings = _decode_mpg(buf, start_idx+4, num)
+            cmd_str.extend(strings)
+            return cmd_size+size, cmd_str
         case 0b1010000:
             # TODO: Consume subpacket
             print("WARNING: [VIF] DIRECT encountered but consuming subpacket unimplemented")

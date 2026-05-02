@@ -1,9 +1,5 @@
 import os
-import struct
 from elf import ELFHeader
-from lower import decode as lower_decode
-from upper import decode as upper_decode
-from vif import decode as vif_decode
 from vif_packet import VIFPacket
 
 # TODO: Accept filepath as arg
