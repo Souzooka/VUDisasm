@@ -10,10 +10,10 @@ COMMAND_PREFIX = PREFIXES.VU
 def _field_0(mnemonic: str, command: int) -> str:
     # Ex: {ADD}{x}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{x}
     MNEMONIC_FORMAT = "{0}{1}.{2}"
-    FD_FORMAT = "{0}{1}"
-    FS_FORMAT = "{0}{1}"
+    FD_FORMAT = "{0}{1},"
+    FS_FORMAT = "{0}{1},"
     FT_FORMAT = "{0}{1}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3:<{REG_SIZE}}}"
+    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
 
     bc = FloatRegister.get_bc(command & 0x3)
     fd = FloatRegister.get_register((command >> 6) & 0x1F)
@@ -31,10 +31,10 @@ def _field_0(mnemonic: str, command: int) -> str:
 def _field_1(mnemonic: str, command: int) -> str:
     # Ex: {ADD}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{xyzw}
     MNEMONIC_FORMAT = "{0}.{1}"
-    FD_FORMAT = "{0}{1}"
-    FS_FORMAT = "{0}{1}"
+    FD_FORMAT = "{0}{1},"
+    FS_FORMAT = "{0}{1},"
     FT_FORMAT = "{0}{1}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3:<{REG_SIZE}}}"
+    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
 
     fd = FloatRegister.get_register((command >> 6) & 0x1F)
     fs = FloatRegister.get_register((command >> 11) & 0x1F)
@@ -46,7 +46,33 @@ def _field_1(mnemonic: str, command: int) -> str:
     fs_s = FS_FORMAT.format(fs, dest)
     ft_s = FT_FORMAT.format(ft, dest)
 
+    command_s = FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
+    if (mnemonic[-1] == 'i'): command_s += ", I"
+    if (mnemonic[-1] == 'q'): command_s += ", Q"
+    return command_s
+
+def _field_2(mnemonic: str, command: int) -> str:
+    # Ex: {ADDA}{x}.{xyzw} {ACC}{xyzw} {VF20}{xyzw} {VF30}{x}
+    MNEMONIC_FORMAT = "{0}{1}.{2}"
+    FD_FORMAT = "{0}{1},"
+    FS_FORMAT = "{0}{1},"
+    FT_FORMAT = "{0}{1}"
+    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
+
+    bc = FloatRegister.get_bc(command & 0x3)
+    fs = FloatRegister.get_register((command >> 11) & 0x1F)
+    ft = FloatRegister.get_register((command >> 16) & 0x1F)
+    dest = FloatRegister.get_dest((command >> 21) & 0xF)
+
+    mnemonic_s = MNEMONIC_FORMAT.format(mnemonic, bc, dest)
+    fd_s = FD_FORMAT.format(FloatRegister.ACC, dest)
+    fs_s = FS_FORMAT.format(fs, dest)
+    ft_s = FT_FORMAT.format(ft, bc)
+
     return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
+
+def _field_3(mnemonic: str, command: int) -> str:
+    return ""
 
 FIELD_0_TABLE = {
     0b0000: "ADD",
@@ -78,9 +104,21 @@ FIELD_1_TABLE = {
     0b100110: "SUBi",
     0b100100: "SUBq",
 }
+FIELD_2_TABLE = {
+    0b000001111: "ADDA",
+    0b000101111: "MADDA",
+    0b000111111: "MSUBA",
+    0b001101111: "MULA",
+    0b000011111: "SUBA",
+}
+FIELD_3_TABLE = {
+
+}
 FIELDS = [
     (FIELD_0_TABLE, lambda cmd: (cmd >> 2) & 0xF, _field_0),
     (FIELD_1_TABLE, lambda cmd: (cmd & 0x3F), _field_1),
+    (FIELD_2_TABLE, lambda cmd: (cmd >> 2) & 0x1FF, _field_2),
+    (FIELD_3_TABLE, lambda cmd: (cmd & 0x7FF), _field_3)
 ]
 
 def decode(command: int) -> Tuple[bool, str]:
