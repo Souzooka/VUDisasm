@@ -1,5 +1,7 @@
 from __future__ import annotations
 import struct
+from lower import decode as lower_decode
+from upper import decode as upper_decode
 
 class ELFProgramTable:
     @classmethod
@@ -141,14 +143,29 @@ class ELFHeader:
 
         return header
 
-elf = open("SCES_556.70", "rb")
-header = ELFHeader.from_file(elf)
-if (section := header.section_table.get_section(".vutext")) is not None:
-    addr = (header.program_table.programs[0].p_vaddr - header.program_table.programs[0].p_offset) + section.sh_offset
-    print(f"Found .vutext {hex(addr)}-{hex(addr+section.sh_size)}!")
-    # get start and end yadayada
-else:
-    # TODO: prompt user for start and end address of .vutext
-    import sys
-    sys.exit(1)
-elf.close()
+# TODO: Accept filepath as arg
+with open("SCES_556.70", "rb") as elf:
+    header = ELFHeader.from_file(elf)
+
+    start = None
+    end = None
+    vaddr_offset = (header.program_table.programs[0].p_vaddr - header.program_table.programs[0].p_offset)
+    if (section := header.section_table.get_section(".vutext")) is not None:
+        start = section.sh_offset
+        end = start + section.sh_size
+    else:
+        # TODO: prompt user for start and end address of .vutext
+        import sys
+        sys.exit(1)
+
+    with open("output.txt", "w") as out_file:
+        for addr in range(start, end, 0x8):
+            vaddr = addr + vaddr_offset
+
+            elf.seek(addr)
+            command = struct.unpack("<I", elf.read(4))[0]
+            out_file.write(f"{hex(vaddr):<15} {lower_decode(command)}\n")
+
+            elf.seek(addr+4)
+            command = struct.unpack("<I", elf.read(4))[0]
+            out_file.write(f"{hex(vaddr+4):<15} {upper_decode(command)}\n")
