@@ -5,7 +5,7 @@ from registers import FloatRegister, IntRegister
 # TODO: probably put this in another file because it's gonna get copied in lower
 MNEMONIC_SIZE = 15
 REG_SIZE = 10
-COMMAND_PREFIX = PREFIXES.VU
+COMMAND_PREFIX = PREFIXES.VU_UPPER
 
 def _field_0(mnemonic: str, command: int) -> str:
     # Ex: {ADD}{x}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{x}
@@ -47,8 +47,8 @@ def _field_1(mnemonic: str, command: int) -> str:
     ft_s = FT_FORMAT.format(ft, dest)
 
     command_s = FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
-    if (mnemonic[-1] == 'i'): command_s += ", I"
-    if (mnemonic[-1] == 'q'): command_s += ", Q"
+    if (mnemonic[-1] == 'i'): command_s += ", " + FloatRegister.I
+    if (mnemonic[-1] == 'q'): command_s += ", " + FloatRegister.Q
     return command_s
 
 def _field_2(mnemonic: str, command: int) -> str:
@@ -72,7 +72,40 @@ def _field_2(mnemonic: str, command: int) -> str:
     return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
 
 def _field_3(mnemonic: str, command: int) -> str:
-    return ""
+    has_i = mnemonic.endswith("i")
+    has_q = mnemonic.endswith("q")
+    has_acc_dest = mnemonic.endswith("A") or has_i or has_q
+    
+    r1 = FloatRegister.get_register((command >> 11) & 0x1F) # fs
+    r2 = FloatRegister.get_register((command >> 16) & 0x1F) # ft
+    r3 = None
+    dest = FloatRegister.get_dest((command >> 21) & 0xF)
+
+    # Field type 3 has a bunch of odd edgecases to account for
+    if mnemonic == "NOP":
+        return "NOP"
+    if mnemonic == "CLIP":
+        return f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:}}".format("CLIPw.xyz", r1 + "xyz,", r2 + "w")
+    if mnemonic == "OPMULA":
+        return f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}".format("OPMULA.xyz", FloatRegister.ACC + "xyz,", r1 + "xyz,", r2 + "xyz")
+
+    if has_acc_dest:
+        r1, r2, r3 = FloatRegister.ACC, r1, r2
+        if has_i: r3 = FloatRegister.I
+        if has_q: r3 = FloatRegister.Q
+
+    # Swap fs, ft to ft, fs for these operations
+    SWAP_LIST = ["ABS", "FTOI0", "FTOI4", "FTOI12", "FTOI15", "ITOF0", "ITOF4", "ITOF12", "ITOF15",]
+    if mnemonic in SWAP_LIST:
+        r1, r2 = r2, r1
+
+    command_s = ""
+    command_s += f"{{0:<{MNEMONIC_SIZE}}} ".format(mnemonic)
+    command_s += f"{{0:<{REG_SIZE}}}".format(r1 + dest + ",")
+    command_s += f"{{0:<{REG_SIZE}}}".format(r2 + dest + ("," if r3 is not None else ""))
+    if r3 is not None:
+        command_s += f"{{0:<{REG_SIZE}}}".format(r3 + (dest if not has_i and not has_q else ""))
+    return command_s
 
 FIELD_0_TABLE = {
     0b0000: "ADD",
@@ -105,14 +138,40 @@ FIELD_1_TABLE = {
     0b100100: "SUBq",
 }
 FIELD_2_TABLE = {
-    0b000001111: "ADDA",
-    0b000101111: "MADDA",
-    0b000111111: "MSUBA",
-    0b001101111: "MULA",
-    0b000011111: "SUBA",
+    0b00000_1111: "ADDA",
+    0b00010_1111: "MADDA",
+    0b00011_1111: "MSUBA",
+    0b00110_1111: "MULA",
+    0b00001_1111: "SUBA",
 }
 FIELD_3_TABLE = {
-
+    0b00111_1111_01: "ABS",
+    0b01010_1111_00: "ADDA",
+    0b01000_1111_00: "ADDAi",
+    0b01000_1111_00: "ADDAq",
+    0b00111_1111_11: "CLIP",
+    0b00101_1111_00: "FTOI0",
+    0b00101_1111_01: "FTOI4",
+    0b00101_1111_10: "FTOI12",
+    0b00101_1111_11: "FTOI15",
+    0b00100_1111_00: "ITOF0",
+    0b00100_1111_01: "ITOF4",
+    0b00100_1111_10: "ITOF12",
+    0b00100_1111_11: "ITOF15",
+    0b01010_1111_01: "MADDA",
+    0b01000_1111_11: "MADDAi",
+    0b01000_1111_01: "MADDAq",
+    0b01011_1111_01: "MSUBA",
+    0b01001_1111_11: "MSUBAi",
+    0b01001_1111_01: "MSUBAq",
+    0b01010_1111_10: "MULA",
+    0b00111_1111_10: "MULAi",
+    0b00111_1111_00: "MULAq",
+    0b01011_1111_11: "NOP",
+    0b01011_1111_10: "OPMULA",
+    0b01011_1111_00: "SUBA",
+    0b01001_1111_10: "SUBAi",
+    0b01001_1111_00: "SUBAq",
 }
 FIELDS = [
     (FIELD_0_TABLE, lambda cmd: (cmd >> 2) & 0xF, _field_0),
@@ -136,5 +195,6 @@ def decode(command: int) -> Tuple[bool, str]:
         if (mnemonic := table.get(cmd, None)) is not None:
             return i_bit, COMMAND_PREFIX + format_fn(mnemonic, command)
 
+    print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return i_bit, COMMAND_PREFIX + hex(command)
 
