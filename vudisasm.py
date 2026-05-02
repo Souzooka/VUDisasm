@@ -27,7 +27,6 @@ with open("SCES_556.70", "rb") as elf:
 
         while (addr := elf.tell()) < end:
             packet = VIFPacket.from_file(elf)
-            print(hex(packet.size))
             elf.seek(packet.size, os.SEEK_CUR)
             vaddr = addr + vaddr_offset
 

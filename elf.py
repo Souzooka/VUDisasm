@@ -12,6 +12,8 @@ class ELFProgramTable:
             f.seek(pos + (i * header.e_phentsize))
             table.programs.append(ELFProgram.from_file(f, header))
         
+        f.seek(pos)
+
         return table
 
 class ELFProgram:
@@ -25,6 +27,8 @@ class ELFProgram:
 
         f.seek(pos + 0x8)
         program.p_vaddr = struct.unpack("<I", f.read(4))[0]
+
+        f.seek(pos)
 
         return program
 
@@ -95,6 +99,8 @@ class ELFSection:
         f.seek(pos + 0x14)
         section.sh_size = struct.unpack("<I", f.read(4))[0]
 
+        f.seek(pos)
+
         return section
     
     def set_name(self, name: str):
@@ -138,5 +144,7 @@ class ELFHeader:
 
         f.seek(pos + header.e_shoff)
         header.section_table = ELFSectionTable.from_file(f, header)
+
+        f.seek(pos)
 
         return header
