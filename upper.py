@@ -113,6 +113,7 @@ FIELD_0_TABLE = {
     0b0100: "MAX",
     0b0101: "MINI",
     0b0011: "MSUB",
+    0b0110: "MUL",
     0b0001: "SUB",
 }
 FIELD_1_TABLE = {
