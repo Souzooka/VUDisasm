@@ -1,5 +1,6 @@
 import struct
 from typing import List
+from vif import decode as vif_decode
 
 # Assumes DMATag (Source Chain Tag) is included
 class VIFPacket:
@@ -28,8 +29,10 @@ class VIFPacket:
         operations.append(f"{COMMAND_PREFIX}{hex(struct.unpack("<I", self.buf[4:8])[0])}")
 
         # Now we should start running into VIFCode
-        # TODO: Return size and strings when decoding
-        for i in range(8, self.size, 4):
-            operations.append(hex(struct.unpack("<I", self.buf[i:i+4])[0]))
+        i = 8
+        while i < self.size:
+            size, strings = vif_decode(self.buf, i)
+            i += size
+            operations.extend(strings)
         
         return operations

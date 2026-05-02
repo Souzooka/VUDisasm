@@ -1,23 +1,21 @@
-from typing import Tuple
+import struct
+from typing import List, Tuple
 
-def _cmd_with_args(cmd: str, **kwargs) -> str:
+def _cmd_with_args(cmd: str, kwargs={}) -> str:
     result = f"{cmd:<9} "
     keys = kwargs.keys()
-    for i in range(len(keys)):
+    for i, k in enumerate(keys):
         if (i == 0):
             result += "   "
         else:
             result += ", "
 
-        k = keys[i]
         result += f"{k}={hex(kwargs[k])}"
     return result
 
-def decode(command: int) -> Tuple[int, str]:
-    in_vif = True
-    command_str = hex(command)
+def decode(buf: bytes, start_idx: int) -> Tuple[int, List[str]]:
     COMMAND_PREFIX = "[VIF] "
-
+    command = struct.unpack("<I", buf[start_idx:start_idx+4])[0]
     i = command >> 31
     i_prefix = "i" if i else ""
     cmd = (command >> 24) & 0x7F
@@ -26,43 +24,59 @@ def decode(command: int) -> Tuple[int, str]:
 
     match cmd:
         case 0b0000000:
-            command_str = "NOP"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}NOP"]
         case 0b0000001:
-            command_str = "STCYCL"
             wl = imm >> 8
             cl = imm & 0xFF
-            command_str = _cmd_with_args(command_str, {"WL": wl, "CL": cl})
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STCYCL", {"WL": wl, "CL": cl})}"]
         case 0b0000010:
-            command_str = "OFFSET"
             val = imm & 0x3F
-            command_str = _cmd_with_args(command_str, {"VAL": val})
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("OFFSET", {"VAL": val})}"]
         case 0b0000011:
-            command_str = "BASE"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("BASE")}"]
         case 0b0000100:
-            command_str = "ITOP"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("ITOP")}"]
         case 0b0000101:
-            command_str = "STMOD"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STMOD")}"]
         case 0b0000110:
-            command_str = "MSKPATH3"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MSKPATH3")}"]
         case 0b0000111:
-            command_str = "MARK"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MARK")}"]
         case 0b0010000:
-            command_str = "FLUSHE"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("FLUSHE")}"]
         case 0b0010001:
-            command_str = "FLUSH"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("FLUSH")}"]
         case 0b0010011:
-            command_str = "FLUSHA"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("FLUSHA")}"]
         case 0b0010100:
-            command_str = "MSCAL"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MSCAL")}"]
         case 0b0010111:
-            command_str = "MSCNT"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MSCNT")}"]
         case 0b0010101:
-            command_str = "MSCALF"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MSCALF")}"]
         case 0b0100000:
-            command_str = "STMASK"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STMASK")}"]
         case 0b0110000:
-            command_str = "STROW"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STROW")}"]
         case 0b0110001:
-            command_str = "STCOL"
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("STCOL")}"]
+        case 0b1001010:
+            # TODO: Consume subpacket
+            print("WARNING: [VIF] MPG encountered but consuming subpacket unimplemented")
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MPG")}"]
+        case 0b1010000:
+            # TODO: Consume subpacket
+            print("WARNING: [VIF] DIRECT encountered but consuming subpacket unimplemented")
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("DIRECT")}"]
+        case 0b1010001:
+            # TODO: Consume subpacket
+            print("WARNING: [VIF] DIRECTHL encountered but consuming subpacket unimplemented")
+            return 4, [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("DIRECTHL")}"]
+        
+    if (cmd & 0x60) == 0x60:
+        # TODO: Consume subpacket
+        print("WARNING: [VIF] UNPACK encountered but consuming subpacket unimplemented")
+        return 4, [f"{COMMAND_PREFIX}{i_prefix}UNPACK"]
 
-    return (in_vif, COMMAND_PREFIX + i_prefix + command_str)
+    print(f"WARNING: Encountered unknown VIF command: {hex(command)}")
+    return 4, [hex(command)]
