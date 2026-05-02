@@ -1,6 +1,7 @@
 import struct
 from typing import List, Tuple
 from lower import decode as lower_decode
+from prefixes import PREFIXES
 from upper import decode as upper_decode
 
 def _cmd_with_args(cmd: str, kwargs={}) -> str:
@@ -15,19 +16,27 @@ def _cmd_with_args(cmd: str, kwargs={}) -> str:
         result += f"{k}={hex(kwargs[k])}"
     return result
 
-def _decode_mpg(buf: bytes, start_idx: int, num: int) -> Tuple[int, List[str]]:
+def _decode_mpg(buf: bytes, start_idx: int, num: int, pc: int) -> Tuple[int, List[str]]:
     strings = []
     for i in range(num):
         idx = start_idx + i * 8
         lower = struct.unpack("<I", buf[idx+0:idx+4])[0]
         upper = struct.unpack("<I", buf[idx+4:idx+8])[0]
-        strings.append(lower_decode(lower))
-        strings.append(upper_decode(upper))
-    
+        i_bit, upper_str = upper_decode(upper)
+
+        # Representation of lower changes depending on if upper command has I bit set
+        if i_bit:
+            # Interpret lower as float moved into I register
+            lower_float = struct.unpack("<f", buf[idx+0:idx+4])[0]
+            strings.append(f"{"[VU]":<8} (Move {lower_float} ({hex(lower)}) into I Register)")
+        else:
+            strings.append(lower_decode(lower, pc))
+        strings.append(upper_str)
+        
     return num * 0x8, strings
 
-def decode(buf: bytes, start_idx: int) -> Tuple[int, List[str]]:
-    COMMAND_PREFIX = f"{"[VIF]":<8}"
+def decode(buf: bytes, start_idx: int, pc: int) -> Tuple[int, List[str]]:
+    COMMAND_PREFIX = PREFIXES.VIF
     command = struct.unpack("<I", buf[start_idx:start_idx+4])[0]
     i = command >> 31
     i_prefix = "i" if i else ""
@@ -80,7 +89,7 @@ def decode(buf: bytes, start_idx: int) -> Tuple[int, List[str]]:
             cmd_size = 4
             cmd_str = [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MPG", {"SIZE": num * 0x8, "LOADADDR": load_addr})}"]
 
-            size, strings = _decode_mpg(buf, start_idx+4, num)
+            size, strings = _decode_mpg(buf, start_idx+4, num, pc)
             cmd_str.extend(strings)
             return cmd_size+size, cmd_str
         case 0b1010000:

@@ -1,5 +1,6 @@
 import struct
 from typing import List
+from prefixes import PREFIXES
 from vif import decode as vif_decode
 
 # Assumes DMATag (Source Chain Tag) is included
@@ -18,9 +19,9 @@ class VIFPacket:
 
         return packet
 
-    def decode(self) -> List[str]:
+    def decode(self, pc: int) -> List[str]:
         DMA_IDS = ["refe", "cnt", "next", "ref", "refs", "call", "ret", "end"]
-        COMMAND_PREFIX = f"{"[DMAC]":<8}"
+        COMMAND_PREFIX = PREFIXES.DMAC
         operations = []
 
         # First 8 bytes are DMATag and ADDR
@@ -31,7 +32,7 @@ class VIFPacket:
         # Now we should start running into VIFCode
         i = 8
         while i < self.size:
-            size, strings = vif_decode(self.buf, i)
+            size, strings = vif_decode(self.buf, i, pc+i)
             i += size
             operations.extend(strings)
         

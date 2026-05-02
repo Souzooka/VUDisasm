@@ -34,7 +34,7 @@ with open("SCES_556.70", "rb") as elf:
                 ]
             )
 
-            commands = packet.decode()
+            commands = packet.decode(vaddr)
             for i, command in enumerate(commands):
                 out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
 

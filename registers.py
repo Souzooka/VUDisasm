@@ -37,10 +37,10 @@ class IntRegister(Register):
 
     @classmethod
     def get_register(cls, reg: int) -> str:
-        return f"VI{hex(reg)[2:]}"
+        return f"VI{str(reg).zfill(2)}"
     
 class FloatRegister(Register):
 
     @classmethod
     def get_register(cls, reg: int) -> str:
-        return f"VF{hex(reg)[2:]}"
+        return f"VF{str(reg).zfill(2)}"
