@@ -147,13 +147,24 @@ def _field_8(mnemonic: str, command: int, pc: int) -> str:
         case "FMAND" | "FMEQ" | "FMOR":
             return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
         case "FSAND" | "FSEQ" | "FSOR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {imm12:#04x}"
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {imm12:#06x}"
         case "FSSET":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm12:#04x}"
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm12:#06x}"
         case "IADDIU" | "ISUBIU":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm15:#04x}"
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm15:#06x}"
 
     raise RuntimeError(f"Could not represent VU lower field type 8 mnemonic {mnemonic}")
+
+def _field_9(mnemonic: str, command: int, pc: int) -> str:
+    imm = command & 0xFFFFFF
+
+    match mnemonic:
+        case "FCAND" | "FCEQ" | "FCOR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.get_register(1)},":<{REG_SIZE}} {imm:#08x}"
+        case "FCSET":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm:#08x}"
+
+    raise RuntimeError(f"Could not represent VU lower field type 9 mnemonic {mnemonic}")
 
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
@@ -237,6 +248,12 @@ FIELD_8_TABLE = {
     0b0001000: "IADDIU",
     0b0001001: "ISUBIU",
 }
+FIELD_9_TABLE = {
+    0b0010010: "FCAND",
+    0b0010000: "FCEQ",
+    0b0010011: "FCOR",
+    0b0010001: "FCSET",
+}
 FIELDS = [
     (FIELD_1_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_1),
     (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3),
@@ -244,6 +261,7 @@ FIELDS = [
     (FIELD_5_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_5),
     (FIELD_7_TABLE, lambda cmd: cmd >> 25, _field_7),
     (FIELD_8_TABLE, lambda cmd: cmd >> 25, _field_8),
+    (FIELD_9_TABLE, lambda cmd: cmd >> 25, _field_9),
 ]
 
 def decode(command: int, pc: int) -> str:
