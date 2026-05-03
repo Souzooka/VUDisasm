@@ -2,6 +2,7 @@ from prefixes import PREFIXES
 from registers import FloatRegister, IntRegister
 
 # TODO: probably put this in another file because it's gonna get copied in lower
+# NOTE: guess it got copied in lower
 MNEMONIC_SIZE = 15
 REG_SIZE = 10
 COMMAND_PREFIX = PREFIXES.VU_LOWER

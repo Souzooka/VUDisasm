@@ -1,48 +1,64 @@
 import os
+import sys
 from elf import ELFHeader
 from vif_packet import VIFPacket
 
-# TODO: Accept filepath as arg
-with open("SCES_556.70", "rb") as elf:
-    header = ELFHeader.from_file(elf)
+if len(sys.argv) < 2:
+    print(f"Usage: {sys.argv[0]} <filename_to_disassemble>")
+    sys.exit(1)
 
-    start = None
-    end = None
-    vaddr_offset = (header.program_table.programs[0].p_vaddr - header.program_table.programs[0].p_offset)
-    if (section := header.section_table.get_section(".vutext")) is not None:
-        start = section.sh_offset
-        end = start + section.sh_size
-    else:
-        # TODO: prompt user for start and end address of .vutext
-        import sys
-        print("WARNING: .vutext section not found")
-        sys.exit(1)
+file_path = sys.argv[1]
+elf = None
+try:
+    elf = open(file_path, "rb")
+except OSError:
+    print(f"ERROR: Could not open \"{file_path}\" as file!")
+    sys.exit(1)
 
-    with open("output.txt", "w") as out_file:
-        elf.seek(start)
+header = ELFHeader.from_file(elf)
 
-        while (addr := elf.tell()) < end:
-            packet = VIFPacket.from_file(elf)
-            elf.seek(packet.size, os.SEEK_CUR)
-            vaddr = addr + vaddr_offset
+start = None
+end = None
+# TODO: Error handling for 0 programs in ELF??
+vaddr_offset = (header.program_table.programs[0].p_vaddr - header.program_table.programs[0].p_offset)
+if (section := header.section_table.get_section(".vutext")) is not None:
+    # .vutext section located in .ELF
+    start = section.sh_offset
+    end = start + section.sh_size
+else:
+    # TODO: prompt user for start and end address of .vutext
+    # this can occur as some compilers are a bit weird and just
+    # shove code and data into one big section
+    print("WARNING: .vutext section not found")
+    sys.exit(1)
 
-            out_file.writelines(
-                [
-                    "------------------------------------\n",
-                    "-          Start of Packet         -\n",
-                    "------------------------------------\n",
-                ]
-            )
+with open("output.txt", "w") as out_file:
+    elf.seek(start)
 
-            commands = packet.decode(vaddr)
-            for i, command in enumerate(commands):
-                out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
+    while (addr := elf.tell()) < end:
+        packet = VIFPacket.from_file(elf)
+        elf.seek(packet.size, os.SEEK_CUR)
+        vaddr = addr + vaddr_offset
 
-            out_file.writelines(
-                [
-                    "------------------------------------\n",
-                    "-          End of Packet           -\n",
-                    "------------------------------------\n",
-                    "\n",
-                ]
-            )
+        out_file.writelines(
+            [
+                "------------------------------------\n",
+                "-          Start of Packet         -\n",
+                "------------------------------------\n",
+            ]
+        )
+
+        commands = packet.decode(vaddr)
+        for i, command in enumerate(commands):
+            out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
+
+        out_file.writelines(
+            [
+                "------------------------------------\n",
+                "-          End of Packet           -\n",
+                "------------------------------------\n",
+                "\n",
+            ]
+        )
+
+elf.close()
