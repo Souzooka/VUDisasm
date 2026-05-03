@@ -86,6 +86,17 @@ def _field_4(mnemonic: str, command: int, pc: int) -> str:
 
     raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
 
+def _field_5(mnemonic: str, command: int, pc: int) -> str:
+    is_ = IntRegister.get_register((command >> 11) & 0x1F)
+    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    imm5 = (command >> 6) & 0x1F
+    
+    # imm5 is signed
+    if (imm5 & 0x10):
+        imm5 = 0x20 - imm5
+
+    return f"{f"{mnemonic}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm5}"
+
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
     # so we'll just move it to LSB for opcodes so we can easily check
@@ -140,10 +151,14 @@ FIELD_4_TABLE = {
     0b10000_1111_11_1: "RXOR",
     0b01110_1111_01_1: "SQRT",
 }
+FIELD_5_TABLE = {
+    0b110010_1: "IADDI",
+}
 FIELDS = [
     (FIELD_1_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_1),
     (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3),
     (FIELD_4_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_4),
+    (FIELD_5_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_5),
 ]
 
 def decode(command: int, pc: int) -> str:
