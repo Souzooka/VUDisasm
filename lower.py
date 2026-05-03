@@ -62,7 +62,29 @@ def _field_3(mnemonic: str, command: int, pc: int) -> str:
         case "XITOP" | "XTOP":
             return f"{mnemonic:<{MNEMONIC_SIZE}} {it_}"
 
+    raise RuntimeError(f"Could not represent VU lower field type 3 mnemonic {mnemonic}")
 
+def _field_4(mnemonic: str, command: int, pc: int) -> str:
+    fs = FloatRegister.get_register((command >> 11) & 0x1F)
+    ft = FloatRegister.get_register((command >> 16) & 0x1F)
+    fsf = FloatRegister.get_bc((command >> 21) & 0x3)
+    ftf = FloatRegister.get_bc((command >> 23) & 0x3)
+    is_ = IntRegister.get_register((command >> 11) & 0x1F)
+    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+
+    match mnemonic:
+        case "DIV" | "RSQRT":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{FloatRegister.Q},":<{REG_SIZE}} {f"{fs}{fsf},":<{REG_SIZE}} {ft}{ftf}"
+        case "EATAN" | "EEXP" | "ERCPR" | "ERSQRT" | "ESIN" | "ESQRT":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.P},":<{REG_SIZE}} {fs}{fsf}"
+        case "MTIR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {fs}{fsf}"
+        case "RINIT" | "RXOR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.R},":<{REG_SIZE}} {fs}{fsf}"
+        case "SQRT":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{FloatRegister.Q},":<{REG_SIZE}} {ft}{ftf}"
+
+    raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
 
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
@@ -104,9 +126,24 @@ FIELD_3_TABLE = {
     0b11010_1111_01_1: "XITOP",
     0b11010_1111_00_1: "XTOP",
 }
+FIELD_4_TABLE = {
+    0b01110_1111_00_1: "DIV",
+    0b11111_1111_01_1: "EATAN",
+    0b11111_1111_10_1: "EEXP",
+    0b11110_1111_10_1: "ERCPR",
+    0b11110_1111_01_1: "ERSQRT",
+    0b11111_1111_00_1: "ESIN",
+    0b11110_1111_00_1: "ESQRT",
+    0b01111_1111_00_1: "MTIR",
+    0b10000_1111_10_1: "RINIT",
+    0b01110_1111_10_1: "RSQRT",
+    0b10000_1111_11_1: "RXOR",
+    0b01110_1111_01_1: "SQRT",
+}
 FIELDS = [
     (FIELD_1_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_1),
-    (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3)
+    (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3),
+    (FIELD_4_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_4),
 ]
 
 def decode(command: int, pc: int) -> str:

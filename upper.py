@@ -101,8 +101,8 @@ def _field_3(mnemonic: str, command: int) -> str:
 
     command_s = ""
     command_s += f"{{0:<{MNEMONIC_SIZE}}} ".format(mnemonic)
-    command_s += f"{{0:<{REG_SIZE}}}".format(r1 + dest + ",")
-    command_s += f"{{0:<{REG_SIZE}}}".format(r2 + dest + ("," if r3 is not None else ""))
+    command_s += f"{{0:<{REG_SIZE}}} ".format(r1 + dest + ",")
+    command_s += f"{{0:<{REG_SIZE}}} ".format(r2 + dest + ("," if r3 is not None else ""))
     if r3 is not None:
         command_s += f"{{0:<{REG_SIZE}}}".format(r3 + (dest if not has_i and not has_q else ""))
     return command_s
