@@ -100,7 +100,7 @@ def _field_3(mnemonic: str, command: int) -> str:
         r1, r2 = r2, r1
 
     command_s = ""
-    command_s += f"{{0:<{MNEMONIC_SIZE}}} ".format(mnemonic)
+    command_s += f"{{0:<{MNEMONIC_SIZE}}} ".format(mnemonic + "." + dest)
     command_s += f"{{0:<{REG_SIZE}}} ".format(r1 + dest + ",")
     command_s += f"{{0:<{REG_SIZE}}} ".format(r2 + dest + ("," if r3 is not None else ""))
     if r3 is not None:
