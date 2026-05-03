@@ -93,7 +93,7 @@ def _field_5(mnemonic: str, command: int, pc: int) -> str:
     
     # imm5 is signed
     if (imm5 & 0x10):
-        imm5 = 0x20 - imm5
+        imm5 = imm5 - 0x20
 
     return f"{f"{mnemonic}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm5}"
 
@@ -107,7 +107,7 @@ def _field_7(mnemonic: str, command: int, pc: int) -> str:
 
     # imm11 is signed
     if (imm11 & 0x400):
-        imm11 = 0x800 - imm11
+        imm11 = imm11 - 0x800
 
     branch_pc = (pc + 8) + (imm11 * 8)
     
@@ -121,17 +121,39 @@ def _field_7(mnemonic: str, command: int, pc: int) -> str:
         case "IBGEZ" | "IBGTZ" | "IBLEZ" | "IBLTZ":
             return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{is_},":<{REG_SIZE}} {hex(branch_pc)}"
         case "ILW" | "ISW":
-            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
         case "JALR":
             return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
         case "JR":
             return f"{mnemonic:<{MNEMONIC_SIZE}} {is_}"
         case "LQ":
-            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{ft},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
         case "SQ":
-            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{fs},":<{REG_SIZE}} {hex(imm11)}({it_}){dest}"
+            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{fs},":<{REG_SIZE}} {hex(imm11)}({it_}){dest}"
 
     raise RuntimeError(f"Could not represent VU lower field type 7 mnemonic {mnemonic}")
+
+def _field_8(mnemonic: str, command: int, pc: int) -> str:
+    imm_lower = command & 0x7FF
+    imm_upper = (command >> 21) & 0xF
+    is_ = IntRegister.get_register((command >> 11) & 0x1F)
+    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    imm12 = ((imm_upper & 0x1) << 11) | imm_lower
+    imm15 = (imm_upper << 11) | imm_lower
+
+    match mnemonic:
+        case "FCGET":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {it_}"
+        case "FMAND" | "FMEQ" | "FMOR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
+        case "FSAND" | "FSEQ" | "FSOR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {imm12:#04x}"
+        case "FSSET":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm12:#04x}"
+        case "IADDIU" | "ISUBIU":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm15:#04x}"
+
+    raise RuntimeError(f"Could not represent VU lower field type 8 mnemonic {mnemonic}")
 
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
@@ -203,12 +225,25 @@ FIELD_7_TABLE = {
     0b0000101: "ISW",
     0b0100101: "JALR",
 }
+FIELD_8_TABLE = {
+    0b0011100: "FCGET",
+    0b0011010: "FMAND",
+    0b0011000: "FMEQ",
+    0b0011011: "FMOR",
+    0b0010110: "FSAND",
+    0b0010100: "FSEQ",
+    0b0010111: "FSOR",
+    0b0010101: "FSSET",
+    0b0001000: "IADDIU",
+    0b0001001: "ISUBIU",
+}
 FIELDS = [
     (FIELD_1_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_1),
     (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3),
     (FIELD_4_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_4),
     (FIELD_5_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_5),
     (FIELD_7_TABLE, lambda cmd: cmd >> 25, _field_7),
+    (FIELD_8_TABLE, lambda cmd: cmd >> 25, _field_8),
 ]
 
 def decode(command: int, pc: int) -> str:
