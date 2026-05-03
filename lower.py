@@ -235,6 +235,9 @@ FIELD_7_TABLE = {
     0b0000100: "ILW",
     0b0000101: "ISW",
     0b0100101: "JALR",
+    0b0100100: "JR",
+    0b0000000: "LQ",
+    0b0000001: "SQ",
 }
 FIELD_8_TABLE = {
     0b0011100: "FCGET",
@@ -275,4 +278,5 @@ def decode(command: int, pc: int) -> str:
         if (mnemonic := table.get(cmd, None)) is not None:
             return COMMAND_PREFIX + format_fn(mnemonic, command, pc)
     
+    print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return COMMAND_PREFIX + hex(command)
