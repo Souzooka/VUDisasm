@@ -32,6 +32,8 @@ def _decode_mpg(buf: bytes, start_idx: int, num: int, pc: int) -> Tuple[int, Lis
         else:
             strings.append(lower_decode(lower, pc))
         strings.append(upper_str)
+
+        pc += 0x8
         
     return num * 0x8, strings
 
@@ -89,7 +91,7 @@ def decode(buf: bytes, start_idx: int, pc: int) -> Tuple[int, List[str]]:
             cmd_size = 4
             cmd_str = [f"{COMMAND_PREFIX}{i_prefix}{_cmd_with_args("MPG", {"SIZE": num * 0x8, "LOADADDR": load_addr})}"]
 
-            size, strings = _decode_mpg(buf, start_idx+4, num, pc)
+            size, strings = _decode_mpg(buf, start_idx+4, num, pc+4)
             cmd_str.extend(strings)
             return cmd_size+size, cmd_str
         case 0b1010000:

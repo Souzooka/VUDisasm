@@ -97,6 +97,42 @@ def _field_5(mnemonic: str, command: int, pc: int) -> str:
 
     return f"{f"{mnemonic}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm5}"
 
+def _field_7(mnemonic: str, command: int, pc: int) -> str:
+    imm11 = command & 0x7FF
+    is_ = IntRegister.get_register((command >> 11) & 0x1F)
+    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    dest = IntRegister.get_dest((command >> 21) & 0xF)
+    fs = FloatRegister.get_register((command >> 11) & 0x1F)
+    ft = FloatRegister.get_register((command >> 16) & 0x1F)
+
+    # imm11 is signed
+    if (imm11 & 0x400):
+        imm11 = 0x800 - imm11
+
+    branch_pc = (pc + 8) + (imm11 * 8)
+    
+    match mnemonic:
+        case "B":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {hex(branch_pc)}"
+        case "BAL":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(branch_pc)}"
+        case "IBEQ" | "IBNE":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {hex(branch_pc)}"
+        case "IBGEZ" | "IBGTZ" | "IBLEZ" | "IBLTZ":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{is_},":<{REG_SIZE}} {hex(branch_pc)}"
+        case "ILW" | "ISW":
+            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+        case "JALR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
+        case "JR":
+            return f"{mnemonic:<{MNEMONIC_SIZE}} {is_}"
+        case "LQ":
+            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{ft},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+        case "SQ":
+            return f"{f"{mnemonic}{dest}":<{MNEMONIC_SIZE}} {f"{fs},":<{REG_SIZE}} {hex(imm11)}({it_}){dest}"
+
+    raise RuntimeError(f"Could not represent VU lower field type 7 mnemonic {mnemonic}")
+
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
     # so we'll just move it to LSB for opcodes so we can easily check
@@ -154,11 +190,25 @@ FIELD_4_TABLE = {
 FIELD_5_TABLE = {
     0b110010_1: "IADDI",
 }
+FIELD_7_TABLE = {
+    0b0100000: "B",
+    0b0100001: "BAL",
+    0b0101000: "IBEQ",
+    0b0101111: "IBGEZ",
+    0b0101101: "IBGTZ",
+    0b0101110: "IBLEZ",
+    0b0101100: "IBLTZ",
+    0b0101001: "IBNE",
+    0b0000100: "ILW",
+    0b0000101: "ISW",
+    0b0100101: "JALR",
+}
 FIELDS = [
     (FIELD_1_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_1),
     (FIELD_3_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_3),
     (FIELD_4_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x7FF), _field_4),
     (FIELD_5_TABLE, lambda cmd: _attach_top_bit(cmd, cmd & 0x3F), _field_5),
+    (FIELD_7_TABLE, lambda cmd: cmd >> 25, _field_7),
 ]
 
 def decode(command: int, pc: int) -> str:
