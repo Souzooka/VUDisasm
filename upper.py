@@ -1,16 +1,11 @@
 from __future__ import annotations
 from typing import Tuple, TYPE_CHECKING
 from prefixes import PREFIXES
-from registers import FloatRegister, IntRegister
+from registers import FloatRegister, SpecialRegister
 
 if TYPE_CHECKING:
     from command import CommandVU
     from vif_packet import VIFPacketIR
-
-# TODO: probably put this in another file because it's gonna get copied in lower
-MNEMONIC_SIZE = 15
-REG_SIZE = 10
-COMMAND_PREFIX = PREFIXES.VU_UPPER
 
 def _field_0(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> None:
     # Ex: {ADD}{x}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{x}
@@ -31,83 +26,106 @@ def _field_0(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, comman
 
 def _field_1(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADD}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{xyzw}
-    MNEMONIC_FORMAT = "{0}.{1}"
-    FD_FORMAT = "{0}{1},"
-    FS_FORMAT = "{0}{1},"
-    FT_FORMAT = "{0}{1}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
 
-    fd = FloatRegister.get_register((command >> 6) & 0x1F)
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
-    dest = FloatRegister.get_dest((command >> 21) & 0xF)
+    upper_ir.mnemonic = mnemonic
+    upper_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+    upper_ir.regs[0].r = (command >> 6) & 0x1F
+    upper_ir.regs[0].type = FloatRegister
+    upper_ir.regs[0].fmt = "{r}{dest}"
+    upper_ir.regs[1].r = (command >> 11) & 0x1F
+    upper_ir.regs[1].type = FloatRegister
+    upper_ir.regs[1].fmt = "{r}{dest}"
+    upper_ir.regs[2].r = (command >> 16) & 0x1F
+    upper_ir.regs[2].type = FloatRegister
+    upper_ir.regs[2].fmt = "{r}{dest}"
+    upper_ir.dest = (command >> 21) & 0xF
 
-    mnemonic_s = MNEMONIC_FORMAT.format(mnemonic, dest)
-    fd_s = FD_FORMAT.format(fd, dest)
-    fs_s = FS_FORMAT.format(fs, dest)
-    ft_s = FT_FORMAT.format(ft, dest)
-
-    if (mnemonic[-1] == 'i'): ft_s = FloatRegister.I
-    if (mnemonic[-1] == 'q'): ft_s = FloatRegister.Q
-
-    command_s = FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
-    return command_s
+    match mnemonic[-1]:
+        case 'i':
+            upper_ir.regs[2].r = SpecialRegister.I
+            upper_ir.regs[2].type = SpecialRegister
+            upper_ir.regs[2].fmt = "{r}"
+        case 'q':
+            upper_ir.regs[2].r = SpecialRegister.Q
+            upper_ir.regs[2].type = SpecialRegister
+            upper_ir.regs[2].fmt = "{r}"
 
 def _field_2(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADDA}{x}.{xyzw} {ACC}{xyzw} {VF20}{xyzw} {VF30}{x}
-    MNEMONIC_FORMAT = "{0}{1}.{2}"
-    FD_FORMAT = "{0}{1},"
-    FS_FORMAT = "{0}{1},"
-    FT_FORMAT = "{0}{1}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
 
-    bc = FloatRegister.get_bc(command & 0x3)
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
-    dest = FloatRegister.get_dest((command >> 21) & 0xF)
-
-    mnemonic_s = MNEMONIC_FORMAT.format(mnemonic, bc, dest)
-    fd_s = FD_FORMAT.format(FloatRegister.ACC, dest)
-    fs_s = FS_FORMAT.format(fs, dest)
-    ft_s = FT_FORMAT.format(ft, bc)
-
-    return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
+    upper_ir.mnemonic = mnemonic
+    upper_ir.mnemonic_fmt = "{mnemonic}{bc}.{dest}"
+    upper_ir.bc = command & 0x3
+    upper_ir.regs[0].r = SpecialRegister.ACC
+    upper_ir.regs[0].type = SpecialRegister
+    upper_ir.regs[0].fmt = "{r}{dest}"
+    upper_ir.regs[1].r = (command >> 11) & 0x1F
+    upper_ir.regs[1].type = FloatRegister
+    upper_ir.regs[1].fmt = "{r}{dest}"
+    upper_ir.regs[2].r = (command >> 16) & 0x1F
+    upper_ir.regs[2].type = FloatRegister
+    upper_ir.regs[2].fmt = "{r}{bc}"
+    upper_ir.dest = (command >> 21) & 0xF
 
 def _field_3(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
-    has_i = mnemonic.endswith("i")
-    has_q = mnemonic.endswith("q")
-    has_acc_dest = mnemonic.endswith("A") or has_i or has_q
-    
-    r1 = FloatRegister.get_register((command >> 11) & 0x1F) # fs
-    r2 = FloatRegister.get_register((command >> 16) & 0x1F) # ft
-    r3 = None
-    dest = FloatRegister.get_dest((command >> 21) & 0xF)
+    upper_ir.mnemonic = mnemonic
+    upper_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+    upper_ir.regs[0].r = (command >> 11) & 0x1F # fs
+    upper_ir.regs[0].type = FloatRegister
+    upper_ir.regs[0].fmt = "{r}{dest}"
+    upper_ir.regs[1].r = (command >> 16) & 0x1F # ft
+    upper_ir.regs[1].type = FloatRegister
+    upper_ir.regs[1].fmt = "{r}{dest}"
+    upper_ir.dest = (command >> 21) & 0xF
 
-    # Field type 3 has a bunch of odd edgecases to account for
-    if mnemonic == "NOP":
-        return "NOP"
-    if mnemonic == "CLIP":
-        return f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:}}".format("CLIPw.xyz", r1 + "xyz,", r2 + "w")
-    if mnemonic == "OPMULA":
-        return f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}".format("OPMULA.xyz", FloatRegister.ACC + "xyz,", r1 + "xyz,", r2 + "xyz")
-
-    if has_acc_dest:
-        r1, r2, r3 = FloatRegister.ACC, r1, r2
-        if has_i: r3 = FloatRegister.I
-        if has_q: r3 = FloatRegister.Q
-
-    # Swap fs, ft to ft, fs for these operations
-    SWAP_LIST = ["ABS", "FTOI0", "FTOI4", "FTOI12", "FTOI15", "ITOF0", "ITOF4", "ITOF12", "ITOF15",]
-    if mnemonic in SWAP_LIST:
-        r1, r2 = r2, r1
-
-    command_s = ""
-    command_s += f"{{0:<{MNEMONIC_SIZE}}} ".format(mnemonic + "." + dest)
-    command_s += f"{{0:<{REG_SIZE}}} ".format(r1 + dest + ",")
-    command_s += f"{{0:<{REG_SIZE}}} ".format(r2 + dest + ("," if r3 is not None else ""))
-    if r3 is not None:
-        command_s += f"{{0:<{REG_SIZE}}}".format(r3 + (dest if not has_i and not has_q else ""))
-    return command_s
+    match mnemonic:
+        case "ABS" | "FTOI0" | "FTOI4" | "FTOI12" | "FTOI15" | "ITOF0" | "ITOF4" | "ITOF12" | "ITOF15":
+            # fs and ft are swapped here
+            upper_ir.regs[0], upper_ir.regs[1] = upper_ir.regs[1], upper_ir.regs[0]
+        case "ADDA" | "MADDA" | "MSUBA" | "MULA" | "SUBA":
+            # Has ACC as first operand
+            upper_ir.regs[0], upper_ir.regs[1], upper_ir.regs[2] = upper_ir.regs[2], upper_ir.regs[0], upper_ir.regs[1]
+            upper_ir.regs[0].r = SpecialRegister.ACC
+            upper_ir.regs[0].type = SpecialRegister
+            upper_ir.regs[0].fmt = "{r}{dest}"
+        case "ADDAi" | "MADDAi" | "MSUBAi" | "MULAi" | "SUBAi":
+            # Has ACC as first operand, I as third
+            upper_ir.regs[0], upper_ir.regs[1], upper_ir.regs[2] = upper_ir.regs[2], upper_ir.regs[0], upper_ir.regs[1]
+            upper_ir.regs[0].r = SpecialRegister.ACC
+            upper_ir.regs[0].type = SpecialRegister
+            upper_ir.regs[0].fmt = "{r}{dest}"
+            upper_ir.regs[2].r = SpecialRegister.I
+            upper_ir.regs[2].type = SpecialRegister
+            upper_ir.regs[2].fmt = "{r}"
+        case "ADDAq" | "MADDAq" | "MSUBAq" | "MULAq" | "SUBAq":
+            # Has ACC as first operand, Q as third
+            upper_ir.regs[0], upper_ir.regs[1], upper_ir.regs[2] = upper_ir.regs[2], upper_ir.regs[0], upper_ir.regs[1]
+            upper_ir.regs[0].r = SpecialRegister.ACC
+            upper_ir.regs[0].type = SpecialRegister
+            upper_ir.regs[0].fmt = "{r}{dest}"
+            upper_ir.regs[2].r = SpecialRegister.Q
+            upper_ir.regs[2].type = SpecialRegister
+            upper_ir.regs[2].fmt = "{r}"
+        case "CLIP":
+            # Custom dest
+            upper_ir.mnemonic_fmt = "{mnemonic}w.xyz"
+            upper_ir.regs[0].fmt = "{r}xyz"
+            upper_ir.regs[1].fmt = "{r}w"
+        case "NOP":
+            # No operands
+            upper_ir.mnemonic_fmt = "{mnemonic}"
+            upper_ir.regs[0].r = None
+            upper_ir.regs[1].r = None
+            upper_ir.regs[2].r = None
+        case "OPMULA":
+            # Has ACC, custom dest
+            upper_ir.regs[0], upper_ir.regs[1], upper_ir.regs[2] = upper_ir.regs[2], upper_ir.regs[0], upper_ir.regs[1]
+            upper_ir.mnemonic_fmt = "{mnemonic}.xyz"
+            upper_ir.regs[0].r = SpecialRegister.ACC
+            upper_ir.regs[0].type = SpecialRegister
+            upper_ir.regs[0].fmt = "{r}xyz"
+            upper_ir.regs[1].fmt = "{r}xyz"
+            upper_ir.regs[2].fmt = "{r}xyz"
 
 FIELD_0_TABLE = {
     0b0000: "ADD",
@@ -183,21 +201,23 @@ FIELDS = [
     (FIELD_3_TABLE, lambda cmd: (cmd & 0x7FF), _field_3)
 ]
 
-def decode(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, command: int) -> Tuple[bool, str]:
-    # Returns (i_bit, command_string)
-    # the I bit indicates that lower should be copied into the I register
-    # (lower is interpreted as a single-precision scalar)
-    i_bit = bool(command >> 31)
+def decode(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, command: int) -> None:
+    # Collect flags for IR
+    upper_ir.i_flag = bool((command >> 31) & 1)
+    upper_ir.e_flag = bool((command >> 30) & 1)
+    upper_ir.m_flag = bool((command >> 29) & 1)
+    upper_ir.d_flag = bool((command >> 28) & 1)
+    upper_ir.t_flag = bool((command >> 27) & 1)
 
     if (command == 0x0):
         # probably alignment
-        return False, COMMAND_PREFIX + "<ALIGN>"
+        upper_ir.mnemonic = "<ALIGN>"
+        return
     
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return i_bit, COMMAND_PREFIX + (format_fn(ir, upper_ir, mnemonic, command) or "")
+            format_fn(ir, upper_ir, mnemonic, command)
+            return
 
     print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
-    return i_bit, COMMAND_PREFIX + hex(command)
-

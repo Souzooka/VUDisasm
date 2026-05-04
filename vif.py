@@ -34,7 +34,8 @@ def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) 
         idx = start_idx + i * 8
         lower = struct.unpack("<I", buf[idx+0:idx+4])[0]
         upper = struct.unpack("<I", buf[idx+4:idx+8])[0]
-        i_bit, upper_str = upper_decode(ir, command.upper, upper)
+        upper_decode(ir, command.upper, upper)
+        i_bit = command.upper.i_flag
 
         # Representation of lower changes depending on if upper command has I bit set
         if i_bit:
@@ -43,7 +44,7 @@ def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) 
             strings.append(f"(Move {lower_float} ({hex(lower)}) into I Register)".format(PREFIXES.VU_LOWER))
         else:
             strings.append(lower_decode(ir, command.lower, lower, pc))
-        strings.append(upper_str)
+        #strings.append(upper_str)
 
         pc += 0x8
         

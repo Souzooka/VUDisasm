@@ -50,14 +50,17 @@ class FloatRegister(Register):
         return f"VF{str(reg).zfill(2)}"
     
 class SpecialRegister(Register):
-    I = 32
-    Q = 33
-    R = 34
-    P = 35
+    ACC = 32
+    I = 33
+    Q = 34
+    R = 35
+    P = 36
 
     @classmethod
     def get_register(cls, reg: int) -> str:
         match reg:
+            case SpecialRegister.ACC:
+                return "ACC"
             case SpecialRegister.I:
                 return "I"
             case SpecialRegister.Q:
