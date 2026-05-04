@@ -1,13 +1,18 @@
-from typing import Tuple
+from __future__ import annotations
+from typing import Tuple, TYPE_CHECKING
 from prefixes import PREFIXES
 from registers import FloatRegister, IntRegister
+
+if TYPE_CHECKING:
+    from command import CommandVU
+    from vif_packet import VIFPacketIR
 
 # TODO: probably put this in another file because it's gonna get copied in lower
 MNEMONIC_SIZE = 15
 REG_SIZE = 10
 COMMAND_PREFIX = PREFIXES.VU_UPPER
 
-def _field_0(mnemonic: str, command: int) -> str:
+def _field_0(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADD}{x}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{x}
     MNEMONIC_FORMAT = "{0}{1}.{2}"
     FD_FORMAT = "{0}{1},"
@@ -28,7 +33,7 @@ def _field_0(mnemonic: str, command: int) -> str:
 
     return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
 
-def _field_1(mnemonic: str, command: int) -> str:
+def _field_1(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADD}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{xyzw}
     MNEMONIC_FORMAT = "{0}.{1}"
     FD_FORMAT = "{0}{1},"
@@ -52,7 +57,7 @@ def _field_1(mnemonic: str, command: int) -> str:
     command_s = FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
     return command_s
 
-def _field_2(mnemonic: str, command: int) -> str:
+def _field_2(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADDA}{x}.{xyzw} {ACC}{xyzw} {VF20}{xyzw} {VF30}{x}
     MNEMONIC_FORMAT = "{0}{1}.{2}"
     FD_FORMAT = "{0}{1},"
@@ -72,7 +77,7 @@ def _field_2(mnemonic: str, command: int) -> str:
 
     return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
 
-def _field_3(mnemonic: str, command: int) -> str:
+def _field_3(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     has_i = mnemonic.endswith("i")
     has_q = mnemonic.endswith("q")
     has_acc_dest = mnemonic.endswith("A") or has_i or has_q
@@ -182,7 +187,7 @@ FIELDS = [
     (FIELD_3_TABLE, lambda cmd: (cmd & 0x7FF), _field_3)
 ]
 
-def decode(command: int) -> Tuple[bool, str]:
+def decode(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, command: int) -> Tuple[bool, str]:
     # Returns (i_bit, command_string)
     # the I bit indicates that lower should be copied into the I register
     # (lower is interpreted as a single-precision scalar)
@@ -195,7 +200,7 @@ def decode(command: int) -> Tuple[bool, str]:
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return i_bit, COMMAND_PREFIX + format_fn(mnemonic, command)
+            return i_bit, COMMAND_PREFIX + format_fn(ir, upper_ir, mnemonic, command)
 
     print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return i_bit, COMMAND_PREFIX + hex(command)

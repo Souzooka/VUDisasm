@@ -1,7 +1,7 @@
 from __future__ import annotations
 import struct
 from typing import List, Tuple, TYPE_CHECKING
-from command import CommandVIF
+from command import CommandVIF, CommandVU
 from lower import decode as lower_decode
 from prefixes import PREFIXES
 from upper import decode as upper_decode
@@ -22,12 +22,19 @@ def _cmd_with_args(cmd: str, kwargs={}) -> str:
     return result
 
 def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) -> int:
+    # Presume start of MPG is probably a subroutine
+    label = ir.get_or_new_label(pc)
+    label.set_type(label.BAL)
+
     strings = []
     for i in range(num):
+        command = CommandVU(pc)
+        ir.add_command(command)
+
         idx = start_idx + i * 8
         lower = struct.unpack("<I", buf[idx+0:idx+4])[0]
         upper = struct.unpack("<I", buf[idx+4:idx+8])[0]
-        i_bit, upper_str = upper_decode(upper)
+        i_bit, upper_str = upper_decode(ir, command.upper, upper)
 
         # Representation of lower changes depending on if upper command has I bit set
         if i_bit:
@@ -35,7 +42,7 @@ def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) 
             lower_float = struct.unpack("<f", buf[idx+0:idx+4])[0]
             strings.append(f"(Move {lower_float} ({hex(lower)}) into I Register)".format(PREFIXES.VU_LOWER))
         else:
-            strings.append(lower_decode(lower, pc))
+            strings.append(lower_decode(ir, command.lower, lower, pc))
         strings.append(upper_str)
 
         pc += 0x8
@@ -52,6 +59,7 @@ def decode(ir: VIFPacketIR, buf: bytes, start_idx: int, pc: int) -> int:
 
     command_ir = CommandVIF(pc)
     command_ir.interrupt = bool(i)
+    ir.add_command(command_ir)
     size = 4
 
     match cmd:
@@ -152,5 +160,4 @@ def decode(ir: VIFPacketIR, buf: bytes, start_idx: int, pc: int) -> int:
         print(f"WARNING: Encountered unknown VIF command: {hex(command)}")
         command_ir.mnemonic = f"[UNKNOWN VIF COMMAND] {hex(command)}"
 
-    ir.add_command(command_ir)
     return size

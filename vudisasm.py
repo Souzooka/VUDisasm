@@ -82,7 +82,7 @@ with open("output.txt", "w") as out_file:
                 # TODO: Formatting/formatter?
                 case CommandType.DMAC:
                     assert isinstance(command, CommandDMAC)
-                    out_file.writelines(f"{command.pc:#x} [DMAC] {command.id_s} {command.size:#x}, {command.addr:#010x}\n")
+                    out_file.write(f"{command.pc:#x} [DMAC] {command.id_s} {command.size:#x}, {command.addr:#010x}\n")
                 case CommandType.VIF:
                     assert isinstance(command, CommandVIF)
                     command_str = f"{command.pc:#x} [VIF] {command.mnemonic}"
@@ -91,9 +91,12 @@ with open("output.txt", "w") as out_file:
                         for k, v in command.kwargs.items():
                             kwargs_strs.append(f"{k}={v:X}")
                         command_str += " " + ", ".join(kwargs_strs)
-                    out_file.writelines(f"{command_str}\n")
-                case CommandVU:
+                    out_file.write(f"{command_str}\n")
+                case CommandType.VU:
                     assert isinstance(command, CommandVU)
+                    if (label := ir.get_label(command.pc)) is not None:
+                        out_file.write("\n")
+                        out_file.write(f"{"":>8}{str(label) + ':':<40} REFS: {", ".join(["0x" + f"{x:X}" for x in label.refs])}\n")
 
         out_file.writelines(
             [

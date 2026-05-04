@@ -1,5 +1,11 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
 from prefixes import PREFIXES
 from registers import FloatRegister, IntRegister
+
+if TYPE_CHECKING:
+    from command import CommandVU
+    from vif_packet import VIFPacketIR
 
 # TODO: probably put this in another file because it's gonna get copied in lower
 # NOTE: guess it got copied in lower
@@ -7,7 +13,7 @@ MNEMONIC_SIZE = 15
 REG_SIZE = 10
 COMMAND_PREFIX = PREFIXES.VU_LOWER
 
-def _field_1(mnemonic: str, command: int, pc: int) -> str:
+def _field_1(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     MNEMONIC_FORMAT = "{0}"
     ID_FORMAT = "{0},"
     IS_FORMAT = "{0},"
@@ -25,7 +31,7 @@ def _field_1(mnemonic: str, command: int, pc: int) -> str:
 
     return FORMAT.format(mnemonic_s, id_s, is_s, it_s)
 
-def _field_3(mnemonic: str, command: int, pc: int) -> str:
+def _field_3(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     fs = FloatRegister.get_register((command >> 11) & 0x1F)
     ft = FloatRegister.get_register((command >> 16) & 0x1F)
     dest = FloatRegister.get_dest((command >> 21) & 0xF)
@@ -65,7 +71,7 @@ def _field_3(mnemonic: str, command: int, pc: int) -> str:
 
     raise RuntimeError(f"Could not represent VU lower field type 3 mnemonic {mnemonic}")
 
-def _field_4(mnemonic: str, command: int, pc: int) -> str:
+def _field_4(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     fs = FloatRegister.get_register((command >> 11) & 0x1F)
     ft = FloatRegister.get_register((command >> 16) & 0x1F)
     fsf = FloatRegister.get_bc((command >> 21) & 0x3)
@@ -87,7 +93,7 @@ def _field_4(mnemonic: str, command: int, pc: int) -> str:
 
     raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
 
-def _field_5(mnemonic: str, command: int, pc: int) -> str:
+def _field_5(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     is_ = IntRegister.get_register((command >> 11) & 0x1F)
     it_ = IntRegister.get_register((command >> 16) & 0x1F)
     imm5 = (command >> 6) & 0x1F
@@ -98,7 +104,7 @@ def _field_5(mnemonic: str, command: int, pc: int) -> str:
 
     return f"{f"{mnemonic}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm5}"
 
-def _field_7(mnemonic: str, command: int, pc: int) -> str:
+def _field_7(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm11 = command & 0x7FF
     is_ = IntRegister.get_register((command >> 11) & 0x1F)
     it_ = IntRegister.get_register((command >> 16) & 0x1F)
@@ -110,7 +116,17 @@ def _field_7(mnemonic: str, command: int, pc: int) -> str:
     if (imm11 & 0x400):
         imm11 = imm11 - 0x800
 
+    # Create label
     branch_pc = (pc + 8) + (imm11 * 8)
+    match mnemonic:
+        case "B" | "IBEQ" | "IBNE" | "IBGEZ" | "IBGTZ" | "IBLEZ" | "IBLTZ":
+            label = ir.get_or_new_label(branch_pc)
+            label.set_type(label.B)
+            label.add_ref(pc)
+        case "BAL":
+            label = ir.get_or_new_label(branch_pc)
+            label.set_type(label.BAL)
+            label.add_ref(pc)
     
     match mnemonic:
         case "B":
@@ -134,7 +150,7 @@ def _field_7(mnemonic: str, command: int, pc: int) -> str:
 
     raise RuntimeError(f"Could not represent VU lower field type 7 mnemonic {mnemonic}")
 
-def _field_8(mnemonic: str, command: int, pc: int) -> str:
+def _field_8(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm_lower = command & 0x7FF
     imm_upper = (command >> 21) & 0xF
     is_ = IntRegister.get_register((command >> 11) & 0x1F)
@@ -156,7 +172,7 @@ def _field_8(mnemonic: str, command: int, pc: int) -> str:
 
     raise RuntimeError(f"Could not represent VU lower field type 8 mnemonic {mnemonic}")
 
-def _field_9(mnemonic: str, command: int, pc: int) -> str:
+def _field_9(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm = command & 0xFFFFFF
 
     match mnemonic:
@@ -268,7 +284,7 @@ FIELDS = [
     (FIELD_9_TABLE, lambda cmd: cmd >> 25, _field_9),
 ]
 
-def decode(command: int, pc: int) -> str:
+def decode(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, command: int, pc: int) -> str:
 
     if (command == 0x0):
         # probably alignment
@@ -277,7 +293,7 @@ def decode(command: int, pc: int) -> str:
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return COMMAND_PREFIX + format_fn(mnemonic, command, pc)
+            return COMMAND_PREFIX + format_fn(ir, lower_ir, mnemonic, command, pc)
     
     print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return COMMAND_PREFIX + hex(command)
