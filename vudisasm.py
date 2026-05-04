@@ -2,6 +2,7 @@ import os
 import sys
 from elf import ELFHeader
 from vif_packet import VIFPacket
+from command import CommandType, CommandDMAC, CommandVIF, CommandVU
 
 WANT_HORIZONTAL_FORMAT = True
 
@@ -75,23 +76,13 @@ with open("output.txt", "w") as out_file:
             ]
         )
 
-        commands = packet.decode(vaddr)
-        # FIXME: This is a GIANT hack; should get VIFPacket.decode to return more info about operations
-        # rather than just a string representation directly and then format it here
-        # could also collect labels (from branch/jump instructions) which would be nice
-        if WANT_HORIZONTAL_FORMAT:
-            i = 0
-            while i < len(commands):
-                command = commands[i]
-                if not command.startswith("["):
-                    out_file.write(f"{hex(vaddr+(i*4)):<15} {command:<50} | {commands[i+1]}\n")
-                    i += 1
-                else:
-                    out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
-                i += 1
-        else:
-            for i, command in enumerate(commands):
-                out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
+        ir = packet.decode(vaddr)
+        for command in ir.commands:
+            match command.type:
+                # TODO: Formatting/formatter?
+                case CommandType.DMAC:
+                    assert isinstance(command, CommandDMAC)
+                    out_file.writelines(f"{command.pc:#x} [DMAC] {command.id_s} {command.size:#x}, {command.addr:#010x}\n")
 
         out_file.writelines(
             [

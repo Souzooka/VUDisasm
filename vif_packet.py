@@ -1,5 +1,7 @@
+from __future__ import annotations
 import struct
-from typing import List
+from typing import List, Set
+from command import CommandIR, CommandDMAC, CommandVIF
 from prefixes import PREFIXES
 from vif import decode as vif_decode
 
@@ -19,15 +21,23 @@ class VIFPacket:
 
         return packet
 
-    def decode(self, pc: int) -> List[str]:
+    def decode(self, pc: int) -> VIFPacketIR:
         DMA_IDS = ["refe", "cnt", "next", "ref", "refs", "call", "ret", "end"]
-        COMMAND_PREFIX = PREFIXES.DMAC
-        operations = []
+
+        ir = VIFPacketIR()
 
         # First 8 bytes are DMATag and ADDR
+        dma_tag = CommandDMAC()
+        dma_tag.pc = pc
+        dma_tag.size = self.size
         word = struct.unpack("<I", self.buf[0:4])[0]
-        operations.append(f"{COMMAND_PREFIX}{DMA_IDS[(word >> 28) & 0x7]} {hex(self.size)}")
-        operations.append(f"{COMMAND_PREFIX}{hex(struct.unpack("<I", self.buf[4:8])[0])}")
+        dma_tag.id = (word >> 28) & 0x7
+        dma_tag.id_s = DMA_IDS[dma_tag.id]
+        addr = struct.unpack("<I", self.buf[4:8])[0]
+        dma_tag.addr = addr
+        ir.commands.append(dma_tag)
+
+        operations = []
 
         # Now we should start running into VIFCode
         i = 8
@@ -36,4 +46,10 @@ class VIFPacket:
             i += size
             operations.extend(strings)
         
-        return operations
+        return ir
+
+class VIFPacketIR:
+    
+    def __init__(self):
+        self.labels: Set[int] = set()
+        self.commands: List[CommandIR] = []
