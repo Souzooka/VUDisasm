@@ -27,7 +27,7 @@ class VIFPacket:
         ir = VIFPacketIR()
 
         # First 8 bytes are DMATag and ADDR
-        dma_tag = CommandDMAC()
+        dma_tag = CommandDMAC(pc)
         dma_tag.pc = pc
         dma_tag.size = self.size
         word = struct.unpack("<I", self.buf[0:4])[0]
@@ -37,14 +37,11 @@ class VIFPacket:
         dma_tag.addr = addr
         ir.commands.append(dma_tag)
 
-        operations = []
-
         # Now we should start running into VIFCode
         i = 8
         while i < self.size:
-            size, strings = vif_decode(self.buf, i, pc+i)
+            size = vif_decode(ir, self.buf, i, pc+i)
             i += size
-            operations.extend(strings)
         
         return ir
 
@@ -53,3 +50,6 @@ class VIFPacketIR:
     def __init__(self):
         self.labels: Set[int] = set()
         self.commands: List[CommandIR] = []
+
+    def add_command(self, command: CommandIR):
+        self.commands.append(command)

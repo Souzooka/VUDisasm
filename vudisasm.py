@@ -83,6 +83,17 @@ with open("output.txt", "w") as out_file:
                 case CommandType.DMAC:
                     assert isinstance(command, CommandDMAC)
                     out_file.writelines(f"{command.pc:#x} [DMAC] {command.id_s} {command.size:#x}, {command.addr:#010x}\n")
+                case CommandType.VIF:
+                    assert isinstance(command, CommandVIF)
+                    command_str = f"{command.pc:#x} [VIF] {command.mnemonic}"
+                    kwargs_strs = []
+                    if command.kwargs:
+                        for k, v in command.kwargs.items():
+                            kwargs_strs.append(f"{k}={v:X}")
+                        command_str += " " + ", ".join(kwargs_strs)
+                    out_file.writelines(f"{command_str}\n")
+                case CommandVU:
+                    assert isinstance(command, CommandVU)
 
         out_file.writelines(
             [
