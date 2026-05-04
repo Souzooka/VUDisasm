@@ -28,7 +28,7 @@ def _decode_mpg(buf: bytes, start_idx: int, num: int, pc: int) -> Tuple[int, Lis
         if i_bit:
             # Interpret lower as float moved into I register
             lower_float = struct.unpack("<f", buf[idx+0:idx+4])[0]
-            strings.append(f"{{0:<8}} (Move {lower_float} ({hex(lower)}) into I Register)".format(PREFIXES.VU_LOWER))
+            strings.append(f"(Move {lower_float} ({hex(lower)}) into I Register)".format(PREFIXES.VU_LOWER))
         else:
             strings.append(lower_decode(lower, pc))
         strings.append(upper_str)

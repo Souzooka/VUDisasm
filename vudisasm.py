@@ -3,6 +3,8 @@ import sys
 from elf import ELFHeader
 from vif_packet import VIFPacket
 
+WANT_HORIZONTAL_FORMAT = True
+
 if len(sys.argv) < 2:
     print(f"Usage: {sys.argv[0]} <filename_to_disassemble>")
     sys.exit(1)
@@ -74,8 +76,22 @@ with open("output.txt", "w") as out_file:
         )
 
         commands = packet.decode(vaddr)
-        for i, command in enumerate(commands):
-            out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
+        # FIXME: This is a GIANT hack; should get VIFPacket.decode to return more info about operations
+        # rather than just a string representation directly and then format it here
+        # could also collect labels (from branch/jump instructions) which would be nice
+        if WANT_HORIZONTAL_FORMAT:
+            i = 0
+            while i < len(commands):
+                command = commands[i]
+                if not command.startswith("["):
+                    out_file.write(f"{hex(vaddr+(i*4)):<15} {command:<50} | {commands[i+1]}\n")
+                    i += 1
+                else:
+                    out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
+                i += 1
+        else:
+            for i, command in enumerate(commands):
+                out_file.write(f"{hex(vaddr+(i*4)):<15} {command}\n")
 
         out_file.writelines(
             [
