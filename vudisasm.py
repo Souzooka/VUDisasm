@@ -26,11 +26,36 @@ if (section := header.section_table.get_section(".vutext")) is not None:
     start = section.sh_offset
     end = start + section.sh_size
 else:
-    # TODO: prompt user for start and end address of .vutext
+    # Prompt user for start and end address of .vutext
     # this can occur as some compilers are a bit weird and just
     # shove code and data into one big section
     print("WARNING: .vutext section not found")
-    sys.exit(1)
+
+    try:
+        num = input("Please enter the start (virtual) address for .vutext: ")
+        start = int(num, 16) - vaddr_offset
+    except:
+        print(f"ERROR: Could not parse \"{num}\" as hex string")
+        sys.exit(1)
+
+    try:
+        num = input("Please enter the end (virtual) address for .vutext: ")
+        end = int(num, 16) - vaddr_offset
+    except:
+        print(f"ERROR: Could not parse \"{num}\" as hex string")
+        sys.exit(1)
+
+    if (start > end):
+        print("ERROR: start address greater than end address")
+        sys.exit(1)
+    
+    if (start % 0x10 != 0):
+        print("ERROR: start not 0x10 byte-aligned")
+        sys.exit(1)
+    
+    if (end % 0x10 != 0):
+        print("ERROR: end not 0x10 byte-aligned")
+        sys.exit(1)
 
 with open("output.txt", "w") as out_file:
     elf.seek(start)
