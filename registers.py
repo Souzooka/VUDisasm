@@ -18,11 +18,15 @@ class Register:
         pass
 
     @classmethod
-    def get_bc(cls, bc: int) -> str:
+    def get_bc(cls, bc: int | None) -> str | None:
+        if bc is None: return None
+
         return cls.COMPONENTS[bc]
     
     @classmethod
-    def get_dest(cls, dest: int) -> str:
+    def get_dest(cls, dest: int | None) -> str | None:
+        if dest is None: return None
+
         result = ""
         for i in range(len(cls.COMPONENTS)):
             if (dest & (1 << i)):
@@ -44,3 +48,23 @@ class FloatRegister(Register):
     @classmethod
     def get_register(cls, reg: int) -> str:
         return f"VF{str(reg).zfill(2)}"
+    
+class SpecialRegister(Register):
+    I = 32
+    Q = 33
+    R = 34
+    P = 35
+
+    @classmethod
+    def get_register(cls, reg: int) -> str:
+        match reg:
+            case SpecialRegister.I:
+                return "I"
+            case SpecialRegister.Q:
+                return "Q"
+            case SpecialRegister.R:
+                return "R"
+            case SpecialRegister.P:
+                return "P"
+            case _:
+                raise RuntimeError()

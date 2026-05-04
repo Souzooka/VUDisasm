@@ -3,6 +3,7 @@ import sys
 from elf import ELFHeader
 from vif_packet import VIFPacket
 from command import CommandType, CommandDMAC, CommandVIF, CommandVU
+from registers import Register
 
 WANT_HORIZONTAL_FORMAT = True
 
@@ -79,7 +80,7 @@ with open("output.txt", "w") as out_file:
         ir = packet.decode(vaddr)
         for command in ir.commands:
             match command.type:
-                # TODO: Formatting/formatter?
+                # TODO | TEMP: Formatting/formatter?
                 case CommandType.DMAC:
                     assert isinstance(command, CommandDMAC)
                     out_file.write(f"{command.pc:#x} [DMAC] {command.id_s} {command.size:#x}, {command.addr:#010x}\n")
@@ -94,9 +95,44 @@ with open("output.txt", "w") as out_file:
                     out_file.write(f"{command_str}\n")
                 case CommandType.VU:
                     assert isinstance(command, CommandVU)
+                    # Print label
                     if (label := ir.get_label(command.pc)) is not None:
                         out_file.write("\n")
-                        out_file.write(f"{"":>8}{str(label) + ':':<40} REFS: {", ".join(["0x" + f"{x:X}" for x in label.refs])}\n")
+                        out_file.write(f"{"":<8}{str(label) + ':':<40} REFS: {", ".join(["0x" + f"{x:X}" for x in label.refs])}\n")
+                    line = ""
+                    # Print pc
+                    line += f"0x{command.pc:X} | "
+                    # Print lower
+                    format_args = {
+                        "mnemonic": command.lower.mnemonic,
+                        "r": "",
+                        "dest": Register.get_dest(command.lower.dest),
+                        "bc": Register.get_bc(command.lower.bc),
+                    }
+                    line += f"{command.lower.mnemonic_fmt:<15} ".format(**format_args)
+                    for reg in command.lower.regs:
+                        if reg.r is None: continue
+                        format_args["r"] = reg.type.get_register(reg.r)
+                        line += f"{reg.fmt:<10}".format(**format_args)
+                    if command.lower.imm is not None:
+                        line += f"{command.lower.imm}"
+                    if command.lower.branch_pc is not None:
+                        line += f"{str(ir.get_label(command.lower.branch_pc))}"
+                    # Seperator
+                    line = f"{line:<50} | "
+                    # Print upper
+                    format_args = {
+                        "mnemonic": command.upper.mnemonic,
+                        "r": "",
+                        "dest": Register.get_dest(command.upper.dest),
+                        "bc": Register.get_bc(command.upper.bc),
+                    }
+                    line += f"{command.upper.mnemonic_fmt:<15} ".format(**format_args)
+                    for reg in command.upper.regs:
+                        if reg.r is None: continue
+                        format_args["r"] = reg.type.get_register(reg.r)
+                        line += f"{reg.fmt:<10}".format(**format_args)
+                    out_file.write(line + "\n")
 
         out_file.writelines(
             [

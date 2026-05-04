@@ -1,4 +1,5 @@
-from typing import Dict
+from typing import Dict, Type, TYPE_CHECKING
+from registers import Register
 
 class CommandType:
     NONE = 0
@@ -28,24 +29,28 @@ class CommandVIF(CommandIR):
         self.interrupt = False
         self.kwargs: Dict[str, int] = {}
 
+class RegisterFormat():
+    def __init__(self):
+        self.r: int | None = None
+        self.type: Type[Register] = Register
+        self.fmt: str = "{r}"
+
 class CommandVU(CommandIR):
     class LowerIR:
         def __init__(self):
             self.mnemonic = ""
+            self.mnemonic_fmt = "{mnemonic}"
             self.float_value: float | None = None
             self.branch_pc: int | None = None
             self.dest: int | None = None
             self.bc: int | None = None
-            self.r1: int | None = None
-            self.r1_fmt = "{r}"
-            self.r2: int | None = None
-            self.r2_fmt = "{r}"
-            self.r3: int | None = None
-            self.r3_fmt = "{r}"
+            self.imm: int | None = None
+            self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
     class UpperIR:
         def __init__(self):
             self.mnemonic = ""
+            self.mnemonic_fmt = "{mnemonic}"
             self.i_flag = False
             self.e_flag = False
             self.m_flag = False
@@ -53,12 +58,7 @@ class CommandVU(CommandIR):
             self.t_flag = False
             self.dest: int | None = None
             self.bc: int | None = None
-            self.r1: int | None = None
-            self.r1_fmt = "{r}"
-            self.r2: int | None = None
-            self.r2_fmt = "{r}"
-            self.r3: int | None = None
-            self.r3_fmt = "{r}"
+            self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
     def __init__(self, pc: int):
         super().__init__(pc)

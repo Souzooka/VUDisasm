@@ -12,26 +12,22 @@ MNEMONIC_SIZE = 15
 REG_SIZE = 10
 COMMAND_PREFIX = PREFIXES.VU_UPPER
 
-def _field_0(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
+def _field_0(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> None:
     # Ex: {ADD}{x}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{x}
-    MNEMONIC_FORMAT = "{0}{1}.{2}"
-    FD_FORMAT = "{0}{1},"
-    FS_FORMAT = "{0}{1},"
-    FT_FORMAT = "{0}{1}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
 
-    bc = FloatRegister.get_bc(command & 0x3)
-    fd = FloatRegister.get_register((command >> 6) & 0x1F)
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
-    dest = FloatRegister.get_dest((command >> 21) & 0xF)
-
-    mnemonic_s = MNEMONIC_FORMAT.format(mnemonic, bc, dest)
-    fd_s = FD_FORMAT.format(fd, dest)
-    fs_s = FS_FORMAT.format(fs, dest)
-    ft_s = FT_FORMAT.format(ft, dest)
-
-    return FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
+    upper_ir.mnemonic = mnemonic
+    upper_ir.mnemonic_fmt = "{mnemonic}{bc}.{dest}"
+    upper_ir.bc = command & 0x3
+    upper_ir.regs[0].r = (command >> 6) & 0x1F
+    upper_ir.regs[0].type = FloatRegister
+    upper_ir.regs[0].fmt = "{r}{dest}"
+    upper_ir.regs[1].r = (command >> 11) & 0x1F
+    upper_ir.regs[1].type = FloatRegister
+    upper_ir.regs[1].fmt = "{r}{dest}"
+    upper_ir.regs[2].r = (command >> 16) & 0x1F
+    upper_ir.regs[2].type = FloatRegister
+    upper_ir.regs[2].fmt = "{r}{bc}"
+    upper_ir.dest = (command >> 21) & 0xF
 
 def _field_1(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, mnemonic: str, command: int) -> str:
     # Ex: {ADD}.{xyzw} {VF10}{xyzw} {VF20}{xyzw} {VF30}{xyzw}
@@ -200,7 +196,7 @@ def decode(ir: VIFPacketIR, upper_ir: CommandVU.UpperIR, command: int) -> Tuple[
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return i_bit, COMMAND_PREFIX + format_fn(ir, upper_ir, mnemonic, command)
+            return i_bit, COMMAND_PREFIX + (format_fn(ir, upper_ir, mnemonic, command) or "")
 
     print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return i_bit, COMMAND_PREFIX + hex(command)

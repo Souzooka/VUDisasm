@@ -293,7 +293,7 @@ def decode(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, command: int, pc: int) 
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return COMMAND_PREFIX + format_fn(ir, lower_ir, mnemonic, command, pc)
+            return COMMAND_PREFIX + (format_fn(ir, lower_ir, mnemonic, command, pc) or "")
     
     print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
     return COMMAND_PREFIX + hex(command)
