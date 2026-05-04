@@ -46,9 +46,10 @@ def _field_1(mnemonic: str, command: int) -> str:
     fs_s = FS_FORMAT.format(fs, dest)
     ft_s = FT_FORMAT.format(ft, dest)
 
+    if (mnemonic[-1] == 'i'): ft_s = FloatRegister.I
+    if (mnemonic[-1] == 'q'): ft_s = FloatRegister.Q
+
     command_s = FORMAT.format(mnemonic_s, fd_s, fs_s, ft_s)
-    if (mnemonic[-1] == 'i'): command_s += ", " + FloatRegister.I
-    if (mnemonic[-1] == 'q'): command_s += ", " + FloatRegister.Q
     return command_s
 
 def _field_2(mnemonic: str, command: int) -> str:
