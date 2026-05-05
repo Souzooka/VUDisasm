@@ -2,12 +2,13 @@ from __future__ import annotations
 from typing import List, TYPE_CHECKING
 from command import CommandType
 from prefixes import PREFIXES
+from registers import Register
 
 if TYPE_CHECKING:
     from command import CommandDMAC, CommandVIF, CommandVU
     from vif_packet import VIFPacketIR
 
-_PC_SIZE = 8
+_PC_SIZE = 10
 """Size of PC on left side of line"""
 _PREFIX_SIZE = 8
 """Size of category prefix"""
@@ -27,15 +28,17 @@ _VU_LABEL_REFS_LEFT_PAD = 20
 # VU
 _VU_MNEMONIC_SIZE = 15
 """Size of VU mnemonic"""
-_VU_OPERAND_SIZE = 12
-"""Size of VU operation operands"""
+_VU_LOWER_OPERAND_SIZE = 10
+"""Size of VU lower operation operands"""
+_VU_UPPER_OPERAND_SIZE = 10
+"""Size of VU upper operation operands"""
 _VU_COMMAND_SIZE = 60
 """Size of upper or lower string"""
 
 def _format_dmac(command: CommandDMAC) -> List[str]:
     DMA_IDS = ["refe", "cnt", "next", "ref", "refs", "call", "ret", "end"]
-    pc_s = f"{command.pc:#x} "
-    prefix_s = f"{PREFIXES.DMAC} "
+    pc_s = f"{command.pc:#x}"
+    prefix_s = f"{PREFIXES.DMAC}"
     return [f"{pc_s:<{_PC_SIZE}} {prefix_s:<{_PREFIX_SIZE}} {DMA_IDS[command.id]} 0x{command.size:X}, 0x{command.addr:08x}\n"]
 
 def _format_vif(command: CommandVIF) -> List[str]:
@@ -62,6 +65,76 @@ def _format_vu(ir: VIFPacketIR, command: CommandVU) -> List[str]:
             ref_s = f"{f"REFS: {ref_s}"}"
         lines.append(f"{label_s}{" ":<{_VU_LABEL_REFS_LEFT_PAD}}{ref_s}\n")
 
+    # Lower commands
+    pc_s = f"0x{command.pc:X}"
+    pc_s = f"{pc_s:<{_PC_SIZE}}"
+    # Mnemonic
+    format_args = {
+        "mnemonic": command.lower.mnemonic,
+        "dest": Register.get_dest(command.lower.dest),
+    }
+    mnemonic_s = f"{command.lower.mnemonic_fmt.format(**format_args):<{_VU_MNEMONIC_SIZE}}"
+    # Operands
+    operand_strings = []
+    for _type, reg_index, val in command.lower.get_operands():
+        match _type:
+            case "r":
+                format_args = {
+                    "r": command.lower.regs[reg_index].type.get_register(val),
+                    "dest": command.lower.regs[reg_index].type.get_dest(command.lower.dest),
+                    "offset": f"0x{(command.lower.offset or 0):X}",
+                    "fsf": command.lower.regs[reg_index].type.get_bc(command.lower.fsf),
+                    "ftf": command.lower.regs[reg_index].type.get_bc(command.lower.ftf),
+                }
+                operand_strings.append(command.lower.regs[reg_index].fmt.format(**format_args))
+            case "imm":
+                operand_strings.append(f"0x{val:X}")
+            case "label":
+                operand_strings.append(str(ir.get_label(val)))
+
+    # Stick a comma on the end of each but last operand
+    for i in range(len(operand_strings) - 1): operand_strings[i] += ","
+    # Pad each operand
+    for i in range(len(operand_strings)): operand_strings[i] = f"{operand_strings[i]:<{_VU_LOWER_OPERAND_SIZE}}"
+    # Join the operands
+    operand_s = " ".join(operand_strings)
+
+    # Put together the lower line
+    line = f"{f"{pc_s} {mnemonic_s} {operand_s}":<{_VU_COMMAND_SIZE}} | "
+
+    # Upper commands
+    pc_s = f"0x{command.pc:X}"
+    pc_s = f"{pc_s:<{_PC_SIZE}}"
+    # Mnemonic
+    format_args = {
+        "mnemonic": command.upper.mnemonic,
+        "dest": Register.get_dest(command.upper.dest),
+        "bc": Register.get_bc(command.upper.bc)
+    }
+    mnemonic_s = f"{command.upper.mnemonic_fmt.format(**format_args):<{_VU_MNEMONIC_SIZE}}"
+    # Operands
+    operand_strings = []
+    for _type, reg_index, val in command.upper.get_operands():
+        match _type:
+            case "r":
+                format_args = {
+                    "r": command.upper.regs[reg_index].type.get_register(val),
+                    "dest": command.upper.regs[reg_index].type.get_dest(command.upper.dest),
+                    "bc": command.upper.regs[reg_index].type.get_bc(command.upper.bc),
+                }
+                operand_strings.append(command.upper.regs[reg_index].fmt.format(**format_args))
+
+    # Stick a comma on the end of each but last operand
+    for i in range(len(operand_strings) - 1): operand_strings[i] += ","
+    # Pad each operand
+    for i in range(len(operand_strings)): operand_strings[i] = f"{operand_strings[i]:<{_VU_UPPER_OPERAND_SIZE}}"
+    # Join the operands
+    operand_s = " ".join(operand_strings)
+
+    # Put together the lower line
+    line += f"{f" {mnemonic_s} {operand_s}":<{_VU_COMMAND_SIZE}}"
+
+    lines.append(line + "\n")
     return lines
 
 def format_commands(ir: VIFPacketIR) -> List[str]:

@@ -49,13 +49,13 @@ class CommandVU(CommandIR):
             self.offset: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
-        def get_operands(self) -> List[Tuple[str, int]]:
+        def get_operands(self) -> List[Tuple[str, int, int]]:
             result = []
-            if self.regs[0].r is not None: result.append(("r", self.regs[0].r))
-            if self.regs[1].r is not None: result.append(("r", self.regs[1].r))
-            if self.regs[2].r is not None: result.append(("r", self.regs[2].r))
-            if self.imm is not None: result.append("imm", self.imm)
-            if self.branch_pc is not None: result.append("label", self.branch_pc)
+            if self.regs[0].r is not None: result.append(("r", 0, self.regs[0].r))
+            if self.regs[1].r is not None: result.append(("r", 1, self.regs[1].r))
+            if self.regs[2].r is not None: result.append(("r", 2, self.regs[2].r))
+            if self.imm is not None: result.append(("imm", -1, self.imm))
+            if self.branch_pc is not None: result.append(("label", -1, self.branch_pc))
             return result
 
     class UpperIR:
@@ -71,11 +71,11 @@ class CommandVU(CommandIR):
             self.bc: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
-        def get_operands(self) -> List[Tuple[str, int]]:
+        def get_operands(self) -> List[Tuple[str, int, int]]:
             result = []
-            if self.regs[0].r is not None: result.append(("r", self.regs[0].r))
-            if self.regs[1].r is not None: result.append(("r", self.regs[1].r))
-            if self.regs[2].r is not None: result.append(("r", self.regs[2].r))
+            if self.regs[0].r is not None: result.append(("r", 0, self.regs[0].r))
+            if self.regs[1].r is not None: result.append(("r", 1, self.regs[1].r))
+            if self.regs[2].r is not None: result.append(("r", 2, self.regs[2].r))
             return result
 
     def __init__(self, pc: int):
