@@ -1,4 +1,4 @@
-from typing import Dict, Type, TYPE_CHECKING
+from typing import Dict, Type, List, Tuple
 from registers import Register
 
 class CommandType:
@@ -17,7 +17,6 @@ class CommandDMAC(CommandIR):
         super().__init__(pc)
         self.type = CommandType.DMAC
         self.id: int = 0
-        self.id_s: str = "" # TODO: Have a formatter handle this
         self.size: int = 0
         self.addr: int = 0
 
@@ -50,13 +49,14 @@ class CommandVU(CommandIR):
             self.offset: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
-        def operand_len(self) -> int:
-            return \
-                int(self.regs[0].r is not None) + \
-                int(self.regs[1].r is not None) + \
-                int(self.regs[2].r is not None) + \
-                int(self.imm is not None) + \
-                int(self.branch_pc is not None)
+        def get_operands(self) -> List[Tuple[str, int]]:
+            result = []
+            if self.regs[0].r is not None: result.append(("r", self.regs[0].r))
+            if self.regs[1].r is not None: result.append(("r", self.regs[1].r))
+            if self.regs[2].r is not None: result.append(("r", self.regs[2].r))
+            if self.imm is not None: result.append("imm", self.imm)
+            if self.branch_pc is not None: result.append("label", self.branch_pc)
+            return result
 
     class UpperIR:
         def __init__(self):
@@ -71,16 +71,15 @@ class CommandVU(CommandIR):
             self.bc: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
 
-        def operand_len(self) -> int:
-            return \
-                int(self.regs[0].r is not None) + \
-                int(self.regs[1].r is not None) + \
-                int(self.regs[2].r is not None)
+        def get_operands(self) -> List[Tuple[str, int]]:
+            result = []
+            if self.regs[0].r is not None: result.append(("r", self.regs[0].r))
+            if self.regs[1].r is not None: result.append(("r", self.regs[1].r))
+            if self.regs[2].r is not None: result.append(("r", self.regs[2].r))
+            return result
 
     def __init__(self, pc: int):
         super().__init__(pc)
         self.type = CommandType.VU
         self.lower = CommandVU.LowerIR()
         self.upper = CommandVU.UpperIR()
-
-

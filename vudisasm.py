@@ -4,6 +4,7 @@ from elf import ELFHeader
 from vif_packet import VIFPacket
 from command import CommandType, CommandDMAC, CommandVIF, CommandVU
 from registers import Register
+from format import format_commands
 
 WANT_HORIZONTAL_FORMAT = True
 
@@ -78,6 +79,8 @@ with open("output.txt", "w") as out_file:
         )
 
         ir = packet.decode(vaddr)
+
+        """
         for command in ir.commands:
             match command.type:
                 # TODO | TEMP: Formatting/formatter?
@@ -138,6 +141,10 @@ with open("output.txt", "w") as out_file:
                         format_args["r"] = reg.type.get_register(reg.r)
                         line += f"{reg.fmt:<10}".format(**format_args)
                     out_file.write(line + "\n")
+        """
+
+        lines = format_commands(ir)
+        out_file.writelines(lines)
 
         out_file.writelines(
             [
