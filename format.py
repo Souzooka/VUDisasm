@@ -35,15 +35,19 @@ _VU_UPPER_OPERAND_SIZE = 10
 _VU_COMMAND_SIZE = 60
 """Size of upper or lower string"""
 
+def _hex(n: int) -> str:
+    sign = n < 0
+    return f"{"-" if sign else ""}0x{abs(n):X}"
+
 def _format_dmac(command: CommandDMAC) -> List[str]:
     DMA_IDS = ["refe", "cnt", "next", "ref", "refs", "call", "ret", "end"]
-    pc_s = f"{command.pc:#x}"
+    pc_s = f"{_hex(command.pc)}"
     prefix_s = f"{PREFIXES.DMAC}"
     return [f"{pc_s:<{_PC_SIZE}} {prefix_s:<{_PREFIX_SIZE}} {DMA_IDS[command.id]} 0x{command.size:X}, 0x{command.addr:08x}\n"]
 
 def _format_vif(command: CommandVIF) -> List[str]:
-    pc_s = f"{command.pc:#x} "
-    prefix_s = f"{PREFIXES.VIF} "
+    pc_s = f"{_hex(command.pc)}"
+    prefix_s = f"{PREFIXES.VIF}"
     mnemonic_s = f"{command.mnemonic} "
     kwargs_strings = [f"{k}=0x{v:X}" for k, v in command.kwargs.items()]
     kwarg_s = ", ".join(kwargs_strings)
@@ -66,7 +70,7 @@ def _format_vu(ir: VIFPacketIR, command: CommandVU) -> List[str]:
         lines.append(f"{label_s}{" ":<{_VU_LABEL_REFS_LEFT_PAD}}{ref_s}\n")
 
     # Lower commands
-    pc_s = f"0x{command.pc:X}"
+    pc_s = f"{_hex(command.pc)}"
     pc_s = f"{pc_s:<{_PC_SIZE}}"
     # Mnemonic
     format_args = {
@@ -82,13 +86,13 @@ def _format_vu(ir: VIFPacketIR, command: CommandVU) -> List[str]:
                 format_args = {
                     "r": command.lower.regs[reg_index].type.get_register(val),
                     "dest": command.lower.regs[reg_index].type.get_dest(command.lower.dest),
-                    "offset": f"0x{(command.lower.offset or 0):X}",
+                    "offset": f"{_hex(command.lower.offset or 0)}",
                     "fsf": command.lower.regs[reg_index].type.get_bc(command.lower.fsf),
                     "ftf": command.lower.regs[reg_index].type.get_bc(command.lower.ftf),
                 }
                 operand_strings.append(command.lower.regs[reg_index].fmt.format(**format_args))
             case "imm":
-                operand_strings.append(f"0x{val:X}")
+                operand_strings.append(f"{_hex(val)}")
             case "label":
                 operand_strings.append(str(ir.get_label(val)))
 
