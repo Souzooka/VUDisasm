@@ -72,36 +72,41 @@ def _format_vu(ir: VIFPacketIR, command: CommandVU) -> List[str]:
     # Lower commands
     pc_s = f"{_hex(command.pc)}"
     pc_s = f"{pc_s:<{_PC_SIZE}}"
-    # Mnemonic
-    format_args = {
-        "mnemonic": command.lower.mnemonic,
-        "dest": Register.get_dest(command.lower.dest),
-    }
-    mnemonic_s = f"{command.lower.mnemonic_fmt.format(**format_args):<{_VU_MNEMONIC_SIZE}}"
-    # Operands
-    operand_strings = []
-    for _type, reg_index, val in command.lower.get_operands():
-        match _type:
-            case "r":
-                format_args = {
-                    "r": command.lower.regs[reg_index].type.get_register(val),
-                    "dest": command.lower.regs[reg_index].type.get_dest(command.lower.dest),
-                    "offset": f"{_hex(command.lower.offset or 0)}",
-                    "fsf": command.lower.regs[reg_index].type.get_bc(command.lower.fsf),
-                    "ftf": command.lower.regs[reg_index].type.get_bc(command.lower.ftf),
-                }
-                operand_strings.append(command.lower.regs[reg_index].fmt.format(**format_args))
-            case "imm":
-                operand_strings.append(f"{_hex(val)}")
-            case "label":
-                operand_strings.append(str(ir.get_label(val, forward_ref=command.lower.forward_ref)))
+    if command.lower.float_value is not None:
+        # LOI instruction
+        mnemonic_s = "LOI"
+        operand_s = str(command.lower.float_value)
+    else:
+        # Mnemonic
+        format_args = {
+            "mnemonic": command.lower.mnemonic,
+            "dest": Register.get_dest(command.lower.dest),
+        }
+        mnemonic_s = f"{command.lower.mnemonic_fmt.format(**format_args):<{_VU_MNEMONIC_SIZE}}"
+        # Operands
+        operand_strings = []
+        for _type, reg_index, val in command.lower.get_operands():
+            match _type:
+                case "r":
+                    format_args = {
+                        "r": command.lower.regs[reg_index].type.get_register(val),
+                        "dest": command.lower.regs[reg_index].type.get_dest(command.lower.dest),
+                        "offset": f"{_hex(command.lower.offset or 0)}",
+                        "fsf": command.lower.regs[reg_index].type.get_bc(command.lower.fsf),
+                        "ftf": command.lower.regs[reg_index].type.get_bc(command.lower.ftf),
+                    }
+                    operand_strings.append(command.lower.regs[reg_index].fmt.format(**format_args))
+                case "imm":
+                    operand_strings.append(f"{_hex(val)}")
+                case "label":
+                    operand_strings.append(str(ir.get_label(val, forward_ref=command.lower.forward_ref)))
 
-    # Stick a comma on the end of each but last operand
-    for i in range(len(operand_strings) - 1): operand_strings[i] += ","
-    # Pad each operand
-    for i in range(len(operand_strings)): operand_strings[i] = f"{operand_strings[i]:<{_VU_LOWER_OPERAND_SIZE}}"
-    # Join the operands
-    operand_s = " ".join(operand_strings)
+        # Stick a comma on the end of each but last operand
+        for i in range(len(operand_strings) - 1): operand_strings[i] += ","
+        # Pad each operand
+        for i in range(len(operand_strings)): operand_strings[i] = f"{operand_strings[i]:<{_VU_LOWER_OPERAND_SIZE}}"
+        # Join the operands
+        operand_s = " ".join(operand_strings)
 
     # Put together the lower line
     line = f"{f"{pc_s} {mnemonic_s} {operand_s}":<{_VU_COMMAND_SIZE}} | "
