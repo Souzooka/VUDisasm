@@ -103,23 +103,28 @@ with open("output.txt", "w") as out_file:
                     # Print pc
                     line += f"0x{command.pc:X} | "
                     # Print lower
-                    format_args = {
-                        "mnemonic": command.lower.mnemonic,
-                        "r": "",
-                        "dest": Register.get_dest(command.lower.dest),
-                        "bc": Register.get_bc(command.lower.bc),
-                    }
-                    line += f"{command.lower.mnemonic_fmt:<15} ".format(**format_args)
-                    for reg in command.lower.regs:
-                        if reg.r is None: continue
-                        format_args["r"] = reg.type.get_register(reg.r)
-                        line += f"{reg.fmt:<10}".format(**format_args)
-                    if command.lower.imm is not None:
-                        line += f"{command.lower.imm}"
-                    if command.lower.branch_pc is not None:
-                        line += f"{str(ir.get_label(command.lower.branch_pc))}"
+                    if command.lower.float_value is not None:
+                        line += f"(Move {command.lower.float_value} ({hex(command.lower.float_n)}) into I Register)"
+                    else:
+                        format_args = {
+                            "mnemonic": command.lower.mnemonic,
+                            "r": "",
+                            "dest": Register.get_dest(command.lower.dest),
+                            "fsf": Register.get_bc(command.lower.fsf),
+                            "ftf": Register.get_bc(command.lower.ftf),
+                            "offset": hex(command.lower.offset or 0),
+                        }
+                        line += f"{command.lower.mnemonic_fmt:<15} ".format(**format_args)
+                        for reg in command.lower.regs:
+                            if reg.r is None: continue
+                            format_args["r"] = reg.type.get_register(reg.r)
+                            line += f"{reg.fmt:<10}".format(**format_args)
+                        if command.lower.imm is not None:
+                            line += f"{command.lower.imm}"
+                        if command.lower.branch_pc is not None:
+                            line += f"{str(ir.get_label(command.lower.branch_pc))}"
                     # Seperator
-                    line = f"{line:<50} | "
+                    line = f"{line:<60} | "
                     # Print upper
                     format_args = {
                         "mnemonic": command.upper.mnemonic,

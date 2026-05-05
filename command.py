@@ -41,11 +41,22 @@ class CommandVU(CommandIR):
             self.mnemonic = ""
             self.mnemonic_fmt = "{mnemonic}"
             self.float_value: float | None = None
+            self.float_n: int | None = None # int repr of float
             self.branch_pc: int | None = None
             self.dest: int | None = None
-            self.bc: int | None = None
+            self.fsf: int | None = None
+            self.ftf: int | None = None
             self.imm: int | None = None
+            self.offset: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
+
+        def operand_len(self) -> int:
+            return \
+                int(self.regs[0].r is not None) + \
+                int(self.regs[1].r is not None) + \
+                int(self.regs[2].r is not None) + \
+                int(self.imm is not None) + \
+                int(self.branch_pc is not None)
 
     class UpperIR:
         def __init__(self):
@@ -59,6 +70,12 @@ class CommandVU(CommandIR):
             self.dest: int | None = None
             self.bc: int | None = None
             self.regs = [RegisterFormat(), RegisterFormat(), RegisterFormat()]
+
+        def operand_len(self) -> int:
+            return \
+                int(self.regs[0].r is not None) + \
+                int(self.regs[1].r is not None) + \
+                int(self.regs[2].r is not None)
 
     def __init__(self, pc: int):
         super().__init__(pc)

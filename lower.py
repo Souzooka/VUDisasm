@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from prefixes import PREFIXES
-from registers import FloatRegister, IntRegister
+from registers import FloatRegister, IntRegister, SpecialRegister
 
 if TYPE_CHECKING:
     from command import CommandVU
@@ -14,84 +14,171 @@ REG_SIZE = 10
 COMMAND_PREFIX = PREFIXES.VU_LOWER
 
 def _field_1(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
-    MNEMONIC_FORMAT = "{0}"
-    ID_FORMAT = "{0},"
-    IS_FORMAT = "{0},"
-    IT_FORMAT = "{0}"
-    FORMAT = f"{{0:<{MNEMONIC_SIZE}}} {{1:<{REG_SIZE}}} {{2:<{REG_SIZE}}} {{3}}"
-
-    id_ = IntRegister.get_register((command >> 6) & 0x1F)
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it = IntRegister.get_register((command >> 16) & 0x1F)
-
-    mnemonic_s = MNEMONIC_FORMAT.format(mnemonic)
-    id_s = ID_FORMAT.format(id_)
-    is_s = IS_FORMAT.format(is_)
-    it_s = IT_FORMAT.format(it)
-
-    return FORMAT.format(mnemonic_s, id_s, is_s, it_s)
+    lower_ir.mnemonic = mnemonic
+    lower_ir.regs[0].r = (command >> 6) & 0x1F # id
+    lower_ir.regs[0].type = IntRegister
+    lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+    lower_ir.regs[1].type = IntRegister
+    lower_ir.regs[2].r = (command >> 16) & 0x1F # it
+    lower_ir.regs[2].type = IntRegister
+    lower_ir.dest = (command >> 21) & 0xF
 
 def _field_3(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
-    dest = FloatRegister.get_dest((command >> 21) & 0xF)
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    lower_ir.mnemonic = mnemonic
+    lower_ir.dest = (command >> 21) & 0xF
 
     match mnemonic:
         case "EATANxy" | "EATANxz" | "ELENG" | "ERLENG" | "ERSADD" | "ESADD" | "ESUM":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.P},":<{REG_SIZE}} {fs}"
+            lower_ir.regs[0].r = SpecialRegister.P
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[1].type = FloatRegister
         case "ILWR" | "ISWR":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} ({is_}){dest}"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # it
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "({r}){dest}"
         case "LQD":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} (--{is_})"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "(--{r})"
         case "LQI":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} ({is_}++)"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "({r}++)"
         case "MFIR":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} {is_}"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "{r}"
         case "MFP":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} {IntRegister.P}"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = SpecialRegister.P
+            lower_ir.regs[1].type = SpecialRegister
+            lower_ir.regs[1].fmt = "{r}"
         case "MOVE":
-            if (ft == fs): return "NOP"
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} {fs}{dest}"
-        case "MR32":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} {fs}{dest}"
-        case "RGET" | "RNEXT":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft}{dest},":<{REG_SIZE}} {IntRegister.R}"
-        case "SQD":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{fs}{dest},":<{REG_SIZE}} (--{it_})"
-        case "SQI":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{fs}{dest},":<{REG_SIZE}} ({it_}++)"
-        case "WAITP" | "WAITQ":
-            return f"{mnemonic}"
-        case "XGKICK":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {is_}"
-        case "XITOP" | "XTOP":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {it_}"
+            fs = (command >> 11) & 0x1F
+            ft = (command >> 16) & 0x1F
+            if fs == ft:
+                lower_ir.mnemonic = "NOP"
+                return
 
-    raise RuntimeError(f"Could not represent VU lower field type 3 mnemonic {mnemonic}")
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = fs
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{dest}"
+        case "MR32":
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 11) & 0x1F # fs
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{dest}"
+        case "RGET" | "RNEXT":
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = SpecialRegister.R
+            lower_ir.regs[1].type = SpecialRegister
+            lower_ir.regs[1].fmt = "{r}{dest}"
+        case "SQD":
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 11) & 0x1F # fs
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 16) & 0x1F # it
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "(--{r})"
+        case "SQI":
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = (command >> 11) & 0x1F # fs
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[0].fmt = "{r}{dest}"
+            lower_ir.regs[1].r = (command >> 16) & 0x1F # it
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "({r}++)"
+        case "WAITP" | "WAITQ":
+            pass
+        case "XGKICK":
+            lower_ir.regs[0].r = (command >> 11) & 0x1F # is
+            lower_ir.regs[0].type = IntRegister
+        case "XITOP" | "XTOP":
+            lower_ir.regs[0].r = (command >> 16) & 0x1F # it
+            lower_ir.regs[0].type = IntRegister
+        case _:
+            raise RuntimeError(f"Could not represent VU lower field type 3 mnemonic {mnemonic}")
 
 def _field_4(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
-    fsf = FloatRegister.get_bc((command >> 21) & 0x3)
-    ftf = FloatRegister.get_bc((command >> 23) & 0x3)
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    fs = (command >> 11) & 0x1F
+    ft = (command >> 16) & 0x1F
+    fsf = (command >> 21) & 0x3
+    ftf = (command >> 23) & 0x3
+    is_ = fs
+    it_ = ft
+    lower_ir.mnemonic = mnemonic
+    lower_ir.fsf = fsf
+    lower_ir.ftf = ftf
 
     match mnemonic:
         case "DIV" | "RSQRT":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{FloatRegister.Q},":<{REG_SIZE}} {f"{fs}{fsf},":<{REG_SIZE}} {ft}{ftf}"
+            lower_ir.regs[0].r = SpecialRegister.Q
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = fs
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{fsf}"
+            lower_ir.regs[2].r = ft
+            lower_ir.regs[2].type = FloatRegister
+            lower_ir.regs[2].fmt = "{r}{ftf}"
         case "EATAN" | "EEXP" | "ERCPR" | "ERSQRT" | "ESIN" | "ESQRT":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.P},":<{REG_SIZE}} {fs}{fsf}"
+            lower_ir.regs[0].r = SpecialRegister.P
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = fs
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{fsf}"
         case "MTIR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {fs}{fsf}"
+            lower_ir.regs[0].r = SpecialRegister.Q
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = it_
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "{r}"
+            lower_ir.regs[2].r = fs
+            lower_ir.regs[2].type = FloatRegister
+            lower_ir.regs[2].fmt = "{r}{fsf}"
         case "RINIT" | "RXOR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.R},":<{REG_SIZE}} {fs}{fsf}"
+            lower_ir.regs[0].r = SpecialRegister.R
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = fs
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{fsf}"
         case "SQRT":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{FloatRegister.Q},":<{REG_SIZE}} {ft}{ftf}"
-
-    raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
+            lower_ir.regs[0].r = SpecialRegister.Q
+            lower_ir.regs[0].type = SpecialRegister
+            lower_ir.regs[1].r = ft
+            lower_ir.regs[1].type = FloatRegister
+            lower_ir.regs[1].fmt = "{r}{ftf}"
+        case _:
+            raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
 
 def _field_5(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     is_ = IntRegister.get_register((command >> 11) & 0x1F)
@@ -102,15 +189,23 @@ def _field_5(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, comman
     if (imm5 & 0x10):
         imm5 = imm5 - 0x20
 
-    return f"{f"{mnemonic}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm5}"
+    lower_ir.mnemonic = mnemonic
+    lower_ir.regs[0].r = it_
+    lower_ir.regs[0].type = IntRegister
+    lower_ir.regs[1].r = is_
+    lower_ir.regs[1].type = IntRegister
+    lower_ir.regs[1].fmt = "{r}"
+    lower_ir.imm = imm5
 
 def _field_7(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm11 = command & 0x7FF
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it_ = IntRegister.get_register((command >> 16) & 0x1F)
-    dest = IntRegister.get_dest((command >> 21) & 0xF)
-    fs = FloatRegister.get_register((command >> 11) & 0x1F)
-    ft = FloatRegister.get_register((command >> 16) & 0x1F)
+    fs = (command >> 11) & 0x1F
+    ft = (command >> 16) & 0x1F
+    is_ = fs
+    it_ = ft
+    dest = (command >> 21) & 0xF
+
+    lower_ir.mnemonic = mnemonic
 
     # imm11 is signed
     if (imm11 & 0x400):
@@ -123,65 +218,111 @@ def _field_7(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, comman
             label = ir.get_or_new_label(branch_pc)
             label.set_type(label.B)
             label.add_ref(pc)
+            lower_ir.branch_pc = branch_pc
         case "BAL":
             label = ir.get_or_new_label(branch_pc)
             label.set_type(label.BAL)
             label.add_ref(pc)
+            lower_ir.branch_pc = branch_pc
     
     match mnemonic:
         case "B":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {hex(branch_pc)}"
+            pass
         case "BAL":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(branch_pc)}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
         case "IBEQ" | "IBNE":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {hex(branch_pc)}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
         case "IBGEZ" | "IBGTZ" | "IBLEZ" | "IBLTZ":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{is_},":<{REG_SIZE}} {hex(branch_pc)}"
+            lower_ir.regs[0].r = is_
+            lower_ir.regs[0].type = IntRegister
         case "ILW" | "ISW":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.dest = dest
+            lower_ir.offset = imm11
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "{offset}({r}){dest}"
         case "JALR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
         case "JR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {is_}"
+            lower_ir.regs[0].r = is_
+            lower_ir.regs[0].type = IntRegister
         case "LQ":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{ft},":<{REG_SIZE}} {hex(imm11)}({is_}){dest}"
+            lower_ir.dest = dest
+            lower_ir.offset = imm11
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = ft
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "{offset}({r}){dest}"
         case "SQ":
-            return f"{f"{mnemonic}.{dest}":<{MNEMONIC_SIZE}} {f"{fs},":<{REG_SIZE}} {hex(imm11)}({it_}){dest}"
-
-    raise RuntimeError(f"Could not represent VU lower field type 7 mnemonic {mnemonic}")
+            lower_ir.dest = dest
+            lower_ir.offset = imm11
+            lower_ir.mnemonic_fmt = "{mnemonic}.{dest}"
+            lower_ir.regs[0].r = fs
+            lower_ir.regs[0].type = FloatRegister
+            lower_ir.regs[1].r = it_
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.regs[1].fmt = "{offset}({r}){dest}"
+        case _:
+            raise RuntimeError(f"Could not represent VU lower field type 7 mnemonic {mnemonic}")
 
 def _field_8(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm_lower = command & 0x7FF
     imm_upper = (command >> 21) & 0xF
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    is_ = (command >> 11) & 0x1F
+    it_ = (command >> 16) & 0x1F
     imm12 = ((imm_upper & 0x1) << 11) | imm_lower
     imm15 = (imm_upper << 11) | imm_lower
+    lower_ir.mnemonic = mnemonic
 
     match mnemonic:
         case "FCGET":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {it_}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
         case "FMAND" | "FMEQ" | "FMOR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {is_}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
         case "FSAND" | "FSEQ" | "FSOR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {imm12:#06x}"
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.imm = imm12
         case "FSSET":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm12:#06x}"
+            lower_ir.imm = imm12
         case "IADDIU" | "ISUBIU":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{it_},":<{REG_SIZE}} {f"{is_},":<{REG_SIZE}} {imm15:#06x}"
-
-    raise RuntimeError(f"Could not represent VU lower field type 8 mnemonic {mnemonic}")
+            lower_ir.regs[0].r = it_
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.regs[1].r = is_
+            lower_ir.regs[1].type = IntRegister
+            lower_ir.imm = imm15
+        case _:
+            raise RuntimeError(f"Could not represent VU lower field type 8 mnemonic {mnemonic}")
 
 def _field_9(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm = command & 0xFFFFFF
+    lower_ir.mnemonic = mnemonic
 
     match mnemonic:
         case "FCAND" | "FCEQ" | "FCOR":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {f"{IntRegister.get_register(1)},":<{REG_SIZE}} {imm:#08x}"
+            lower_ir.regs[0].r = 1
+            lower_ir.regs[0].type = IntRegister
+            lower_ir.imm = imm
         case "FCSET":
-            return f"{mnemonic:<{MNEMONIC_SIZE}} {imm:#08x}"
-
-    raise RuntimeError(f"Could not represent VU lower field type 9 mnemonic {mnemonic}")
+            lower_ir.imm = imm
+        case _:
+            raise RuntimeError(f"Could not represent VU lower field type 9 mnemonic {mnemonic}")
 
 def _attach_top_bit(cmd: int, n: int):
     # Lower has a different field type depending on if the top bit is set,
@@ -284,16 +425,18 @@ FIELDS = [
     (FIELD_9_TABLE, lambda cmd: cmd >> 25, _field_9),
 ]
 
-def decode(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, command: int, pc: int) -> str:
+def decode(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, command: int, pc: int) -> None:
 
     if (command == 0x0):
         # probably alignment
-        return COMMAND_PREFIX + "<ALIGN>"
+        lower_ir.mnemonic = "<ALIGN>"
+        return
     
     for table, extract_fn, format_fn in FIELDS:
         cmd = extract_fn(command)
         if (mnemonic := table.get(cmd, None)) is not None:
-            return COMMAND_PREFIX + (format_fn(ir, lower_ir, mnemonic, command, pc) or "")
+            format_fn(ir, lower_ir, mnemonic, command, pc)
+            return
     
-    print(f"WARNING: Unrecognized VU Upper command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
-    return COMMAND_PREFIX + hex(command)
+    print(f"WARNING: Unrecognized VU Lower command: 0x{hex(command)[2:].upper().zfill(8)} ({bin(command)[2:].zfill(32)})")
+    return
