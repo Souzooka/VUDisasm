@@ -1,6 +1,6 @@
 from __future__ import annotations
 import struct
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Tuple
 from command import CommandIR, CommandDMAC
 from vif import decode as vif_decode
 
@@ -42,6 +42,9 @@ class VIFPacket:
             size = vif_decode(ir, self.buf, i, pc+i)
             i += size
         
+        # Finally resolve any forward references we have for labels
+        ir.resolve_forward_labels()
+
         return ir
 
 class VIFPacketIR:
@@ -50,9 +53,10 @@ class VIFPacketIR:
         B = 0
         BAL = 1
 
-        def __init__(self, pc: int):
+        def __init__(self, pc: int, forward_ref: bool = False):
             assert pc % 4 == 0
-            self.pc = pc
+            self.forward_ref = False # For labels we can't yet resolve
+            self.pc: int = pc
             self.type = VIFPacketIR.Label.B
             self.refs: Set[int] = set()
             self.symbol: str | None = None
@@ -80,21 +84,48 @@ class VIFPacketIR:
 
             assert False
             return f"{self.pc:X}"
-    
+        
     def __init__(self):
         self.labels: Dict[int, VIFPacketIR.Label] = {}
+        self.forward_labels: Dict[int, VIFPacketIR.Label] = {}
         self.commands: List[CommandIR] = []
+        # Pairs of (load_addr, size, pc) to properly resolve branch addresses to virtual PC addr
+        self.load_addrs: List[Tuple[int, int, int]] = []
 
     def add_command(self, command: CommandIR):
         self.commands.append(command)
 
-    def get_label(self, pc: int) -> VIFPacketIR.Label | None:
+    def get_label(self, pc: int, forward_ref: bool = False) -> VIFPacketIR.Label | None:
+        if forward_ref:
+            return self.forward_labels.get(pc, None)
         return self.labels.get(pc, None)
 
-    def get_or_new_label(self, pc: int) -> VIFPacketIR.Label:
-        if pc in self.labels:
-            return self.labels[pc]
+    def get_or_new_label(self, pc: int, forward_ref: bool = False) -> VIFPacketIR.Label:
+        if forward_ref:
+            if pc in self.forward_labels:
+                return self.forward_labels[pc]
+        else:
+            if pc in self.labels:
+                return self.labels[pc]
         
-        label = VIFPacketIR.Label(pc)
-        self.labels[pc] = label
+        label = VIFPacketIR.Label(pc, forward_ref=forward_ref)
+        if forward_ref:
+            self.forward_labels[pc] = label
+        else:
+            self.labels[pc] = label
         return label
+
+    def resolve_forward_labels(self):
+        for actual_end_addr, label in self.forward_labels.copy().items():
+            branch_pc = -1
+            for load_addr, size, vaddr in self.load_addrs:
+                if actual_end_addr in range(load_addr, load_addr+size):
+                    branch_pc = vaddr + (actual_end_addr - load_addr)
+
+            assert branch_pc != -1
+
+            resolved_label = self.get_or_new_label(branch_pc)
+            for ref in label.refs:
+                resolved_label.add_ref(ref)
+
+            self.forward_labels[actual_end_addr] = resolved_label

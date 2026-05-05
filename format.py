@@ -94,7 +94,7 @@ def _format_vu(ir: VIFPacketIR, command: CommandVU) -> List[str]:
             case "imm":
                 operand_strings.append(f"{_hex(val)}")
             case "label":
-                operand_strings.append(str(ir.get_label(val)))
+                operand_strings.append(str(ir.get_label(val, forward_ref=command.lower.forward_ref)))
 
     # Stick a comma on the end of each but last operand
     for i in range(len(operand_strings) - 1): operand_strings[i] += ","

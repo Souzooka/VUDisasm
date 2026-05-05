@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import Tuple, TYPE_CHECKING
 from prefixes import PREFIXES
 from registers import FloatRegister, IntRegister, SpecialRegister
 
@@ -197,6 +197,37 @@ def _field_5(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, comman
     lower_ir.regs[1].fmt = "{r}"
     lower_ir.imm = imm5
 
+def _resolve_branch_pc(ir: VIFPacketIR, pc: int, imm: int) -> Tuple[bool, int]:
+    # Sections of microprograms can have VIFcode between them (esp. since you can only transfer 0x800 bytes at a time)
+    # so we need to properly handle gaps between microprogram parts
+    # Bit of a hacky workaround so need to see if there's a better way to handle this
+    pc += 8
+    actual_start_addr = 0
+    forward_ref = False
+    for load_addr, size, vaddr in ir.load_addrs:
+        if pc in range(vaddr, vaddr+size):
+            actual_start_addr = (pc - vaddr) + load_addr
+    
+    actual_end_addr = actual_start_addr + imm * 8
+
+    # PC wrapping (this assumes VU1!!!)
+    if actual_end_addr < 0x0:
+        actual_end_addr += 0x4000
+    if actual_end_addr >= 0x4000:
+        actual_end_addr -= 0x4000
+
+    branch_pc = -1
+    for load_addr, size, vaddr in ir.load_addrs:
+        if actual_end_addr in range(load_addr, load_addr+size):
+            branch_pc = vaddr + (actual_end_addr - load_addr)
+
+    if branch_pc == -1: 
+        # Forward reference
+        forward_ref = True
+        branch_pc = actual_end_addr
+
+    return forward_ref, branch_pc
+
 def _field_7(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
     imm11 = command & 0x7FF
     fs = (command >> 11) & 0x1F
@@ -212,19 +243,21 @@ def _field_7(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, comman
         imm11 = imm11 - 0x800
 
     # Create label
-    branch_pc = (pc + 8) + (imm11 * 8)
     match mnemonic:
         case "B" | "IBEQ" | "IBNE" | "IBGEZ" | "IBGTZ" | "IBLEZ" | "IBLTZ":
-            label = ir.get_or_new_label(branch_pc)
+            forward_ref, branch_pc = _resolve_branch_pc(ir, pc, imm11)
+            label = ir.get_or_new_label(branch_pc, forward_ref)
             label.set_type(label.B)
             label.add_ref(pc)
             lower_ir.branch_pc = branch_pc
+            lower_ir.forward_ref = forward_ref
         case "BAL":
-            label = ir.get_or_new_label(branch_pc)
+            forward_ref, branch_pc = _resolve_branch_pc(ir, pc, imm11)
+            label = ir.get_or_new_label(branch_pc, forward_ref)
             label.set_type(label.BAL)
             label.add_ref(pc)
             lower_ir.branch_pc = branch_pc
-    
+            lower_ir.forward_ref = forward_ref
     match mnemonic:
         case "B":
             pass

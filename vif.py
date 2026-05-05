@@ -1,31 +1,14 @@
 from __future__ import annotations
 import struct
-from typing import List, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING
 from command import CommandVIF, CommandVU
 from lower import decode as lower_decode
-from prefixes import PREFIXES
 from upper import decode as upper_decode
 
 if TYPE_CHECKING:
     from vif_packet import VIFPacketIR
 
-def _cmd_with_args(cmd: str, kwargs={}) -> str:
-    result = f"{cmd:<9} "
-    keys = kwargs.keys()
-    for i, k in enumerate(keys):
-        if (i == 0):
-            result += "   "
-        else:
-            result += ", "
-
-        result += f"{k}={hex(kwargs[k])}"
-    return result
-
 def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) -> int:
-    # Presume start of MPG is probably a subroutine
-    label = ir.get_or_new_label(pc)
-    label.set_type(label.BAL)
-
     strings = []
     for i in range(num):
         command = CommandVU(pc)
@@ -52,7 +35,6 @@ def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) 
     return num * 0x8
 
 def decode(ir: VIFPacketIR, buf: bytes, start_idx: int, pc: int) -> int:
-    COMMAND_PREFIX = PREFIXES.VIF
     command = struct.unpack("<I", buf[start_idx:start_idx+4])[0]
     i = command >> 31
     cmd = (command >> 24) & 0x7F
@@ -141,6 +123,12 @@ def decode(ir: VIFPacketIR, buf: bytes, start_idx: int, pc: int) -> int:
             if (num == 0): num = 256
             load_addr = imm * 0x8
             command_ir.kwargs = {"SIZE": num * 0x8, "LOADADDR": load_addr}
+            ir.load_addrs.append((load_addr, num * 0x8, pc+4))
+
+            # Presume 0x0 is probably a subroutine
+            if load_addr == 0x0:
+                label = ir.get_or_new_label(pc+4)
+                label.set_type(label.BAL)            
 
             cmd_size = 4
             size = cmd_size + _decode_mpg(ir, buf, start_idx+4, num, pc+4)

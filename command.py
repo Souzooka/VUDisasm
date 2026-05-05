@@ -42,6 +42,7 @@ class CommandVU(CommandIR):
             self.float_value: float | None = None
             self.float_n: int | None = None # int repr of float
             self.branch_pc: int | None = None
+            self.forward_ref: bool = False
             self.dest: int | None = None
             self.fsf: int | None = None
             self.ftf: int | None = None
