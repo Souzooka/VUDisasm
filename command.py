@@ -56,6 +56,7 @@ class CommandVU(CommandIR):
             if self.regs[1].r is not None: result.append(("r", 1, self.regs[1].r))
             if self.regs[2].r is not None: result.append(("r", 2, self.regs[2].r))
             if self.imm is not None: result.append(("imm", -1, self.imm))
+            if self.float_value is not None: result.append(("float_imm", -1, self.float_value))
             if self.branch_pc is not None: result.append(("label", -1, self.branch_pc))
             return result
 

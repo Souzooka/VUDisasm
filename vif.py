@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from vif_packet import VIFPacketIR
 
 def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) -> int:
-    strings = []
     for i in range(num):
         command = CommandVU(pc)
         ir.add_command(command)
@@ -24,11 +23,11 @@ def _decode_mpg(ir: VIFPacketIR, buf: bytes, start_idx: int, num: int, pc: int) 
         if i_bit:
             # Interpret lower as float moved into I register
             lower_float = struct.unpack("<f", buf[idx+0:idx+4])[0]
+            command.lower.mnemonic = "LOI"
             command.lower.float_value = lower_float
             command.lower.float_n = lower
         else:
-            strings.append(lower_decode(ir, command.lower, lower, pc))
-        #strings.append(upper_str)
+            lower_decode(ir, command.lower, lower, pc)
 
         pc += 0x8
         
