@@ -181,8 +181,8 @@ def _field_4(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, comman
             raise RuntimeError(f"Could not represent VU lower field type 4 mnemonic {mnemonic}")
 
 def _field_5(ir: VIFPacketIR, lower_ir: CommandVU.LowerIR, mnemonic: str, command: int, pc: int) -> str:
-    is_ = IntRegister.get_register((command >> 11) & 0x1F)
-    it_ = IntRegister.get_register((command >> 16) & 0x1F)
+    is_ = (command >> 11) & 0x1F
+    it_ = (command >> 16) & 0x1F
     imm5 = (command >> 6) & 0x1F
     
     # imm5 is signed
